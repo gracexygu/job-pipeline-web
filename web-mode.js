@@ -176,7 +176,8 @@ async function addInterview() {
 
 async function reload() {
   try {
-    state.data = await store.read() || await store.initialize();
+    const existing = await store.read();
+    state.data = existing || await store.write(createSampleState(), null);
     render();
   } catch (error) { status("无法读取浏览器本地数据：" + error.message, true); }
 }
