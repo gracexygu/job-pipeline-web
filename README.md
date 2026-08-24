@@ -1,9 +1,9 @@
 # Job Pipeline Web
 
-Static Web mode for the Job Pipeline board. It stores data only in the current browser's IndexedDB and supports JSON backup and recovery.
+这是 Job Pipeline 看板的静态 Web 模式。数据只保存在当前浏览器的 IndexedDB，支持 JSON 导出备份与导入恢复。
 
-Open `index.html` from GitHub Pages. The published site has no server, account, telemetry, Node runtime, SQLite database, or network data API.
+通过 GitHub Pages 打开本项目。公开站点不包含服务器、账号、遥测、Node 运行时、SQLite 数据库或网络数据 API。
 
-The first-use data is clearly marked as fictional SAMPLE data. Use the local data menu to start with empty browser data, export a backup, or restore a JSON backup.
+首次数据会明确标注为虚构 SAMPLE 数据。可在“本地数据”中切换为空白浏览器数据、导出备份或恢复 JSON 备份。
 
-`skill/browser-agent-guide/` documents browser-only operation and human approval gates for agents.
+`skill/browser-agent-guide/` 提供面向浏览器 Agent 的操作规则与人工确认节点。

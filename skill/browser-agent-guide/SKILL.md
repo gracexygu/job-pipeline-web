@@ -1,15 +1,15 @@
 ---
 name: job-pipeline-web-browser-agent
-description: Browser-only operations for Job Pipeline Web mode.
+description: Job Pipeline Web 模式的纯浏览器操作规则。
 ---
 
-# Job Pipeline Web Mode Browser Guide
+# Job Pipeline Web 模式浏览器操作指南
 
-Use visible webpage controls only. This guide does not authorize job submissions, external account access, outreach, or destructive actions.
+仅使用网页中可见的控件。本指南不授权提交求职申请、访问外部账号、对外沟通或执行破坏性操作。
 
-1. Confirm the header state before acting: SAMPLE is fictional data; LOCAL is data stored only in this browser. 未备份 means recovery is not currently evidenced.
-2. Search and open a visible company and role. If multiple rows plausibly match, return the candidates to the user instead of guessing.
-3. Make changes through the row menu or 新增岗位. After saving, read the visible row back and confirm the requested field changed.
-4. JSON import, switching data sets, emptying data, and restoration are Human Gates. Do not pass a confirmation without direct user authorization. Export JSON before an authorized destructive action when preservation is requested.
-5. When a multi-tab conflict appears, select 重新载入, reread the target row, and return any remaining ambiguity to the user. Do not retry the old write.
-6. Do not claim persistence until the saved value remains after using the visible refresh control.
+1. 操作前确认页头状态：SAMPLE 是虚构数据；LOCAL 只保存在当前浏览器；未备份表示尚未有可验证的恢复依据。
+2. 搜索并打开可见的公司和岗位。若有多条记录都可能匹配，列出候选项交由用户确认，不自行猜测。
+3. 通过行菜单或“新增岗位”修改数据。保存后读取可见行，确认用户指定字段已经变更。
+4. 导入 JSON、切换数据集、清空数据和恢复数据都属于人工确认节点。没有用户直接授权，不得通过确认；若用户要求保留数据，在已授权的破坏性操作前先导出 JSON。
+5. 出现多标签页冲突时，选择“重新载入”，重新读取目标行；仍存在歧义时交还用户，不重试旧写入。
+6. 只有在使用可见的刷新控件后，保存值仍然存在，才能声明持久化成功。
