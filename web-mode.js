@@ -28,7 +28,8 @@ function configureShell() {
   document.documentElement.dataset.mode = "web";
   document.title = "Job Pipeline Web";
   $(".brand-lockup .eyebrow").textContent = "WEB MODE";
-  $(".top-tabs").innerHTML = "<button class=\"active\" type=\"button\">投递管理</button><a class=\"web-lark-link\" href=\"https://my.feishu.cn/base/G5xUbSCRFaEViosGhntcyCWanzc?table=ldx1rDVnmT1I8eNp\" target=\"_blank\" rel=\"noreferrer\">多维表格</a>";
+  $(".top-tabs").innerHTML = "<button class=\"active\" type=\"button\">投递管理</button>";
+  $("#refresh").insertAdjacentHTML("beforebegin", "<a class=\"web-lark-link\" href=\"https://my.feishu.cn/base/G5xUbSCRFaEViosGhntcyCWanzc?table=ldx1rDVnmT1I8eNp\" target=\"_blank\" rel=\"noreferrer\">多维表格</a>");
   $("#addColumn").remove();
   $("#positionViewSwitch").remove();
   $("#dashboardWorkspace").remove();
