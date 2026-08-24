@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f3f1eb">
+  <title>Local Job Pipeline</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand-lockup">
+      <a class="home-mark-link" href="./" aria-label="回到投递主页" title="回到投递主页"><span class="breathing-home" aria-hidden="true"><i></i><i></i><i></i></span></a>
+      <div>
+        <span class="eyebrow">CAREER OPERATIONS</span>
+        <h1>秋招投递主面板</h1>
+      </div>
+    </div>
+    <nav class="top-tabs" aria-label="主视图">
+      <button class="active" data-view="pipeline" aria-current="page">投递管理</button>
+      <button data-view="resume">简历排版</button>
+      <button data-view="application">网申投递</button>
+    </nav>
+    <div class="header-meta">
+      <span class="source-status"><i aria-hidden="true"></i><span id="importMeta">正在载入本地数据</span></span>
+      <button id="refresh" class="icon-button" title="刷新数据" aria-label="刷新数据">↻</button>
+    </div>
+  </header>
+  <main>
+    <div id="notice" class="notice hidden" role="status" aria-live="polite"></div>
+    <section id="pipelineView">
+      <section class="toolbar" aria-label="筛选岗位">
+        <div id="stages" class="segments" role="group" aria-label="按阶段筛选"></div>
+        <div class="filter-tools">
+          <label class="search-field"><span class="visually-hidden">搜索岗位</span><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="搜索公司、岗位或 JD" autocomplete="off"></label>
+          <label class="recommendation-filter"><span class="visually-hidden">推荐动作</span><select id="recommendation"><option value="">全部动作</option><option>立即投递</option><option>补信息</option><option>尽快投递</option><option>跟进</option><option>复盘</option><option>暂不投</option></select></label>
+          <span id="resultCount" class="result-count" aria-live="polite"></span>
+          <button id="addColumn" class="secondary-action" type="button"><span aria-hidden="true">＋</span>新增列</button>
+          <button id="add" class="add-position" type="button"><span aria-hidden="true">＋</span>新增岗位</button>
+        </div>
+      </section>
+      <div id="positionViewSwitch" class="position-view-switch" role="group" aria-label="全部岗位视图">
+        <button type="button" data-position-view="table" aria-pressed="true">表格</button>
+        <button type="button" data-position-view="dashboard" aria-pressed="false">仪表盘</button>
+      </div>
+      <section class="workspace" aria-label="岗位工作台">
+        <div class="table-wrap">
+          <table class="data-grid">
+            <thead><tr id="columnHeaders"></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="dashboardWorkspace" class="dashboard-workspace hidden" aria-label="投递仪表盘"></section>
+      <section id="assessmentWorkspace" class="assessment-workspace hidden" aria-label="待测评任务看板"></section>
+      <section id="intentsWorkspace" class="intents-workspace hidden" aria-label="待确认变更"></section>
+      <section id="sourcesWorkspace" class="sources-workspace hidden" aria-label="检索新机会"></section>
+      <section id="interviewWorkspace" class="interview-workspace hidden" aria-label="面试轮次进度"></section>
+    </section>
+    <section id="resumeView" class="tool-view hidden" aria-label="简历排版工具">
+      <iframe id="resumeFormatter" title="简历排版工具" loading="lazy"></iframe>
+    </section>
+    <section id="applicationView" class="application-view hidden" aria-label="网申通用事实表">
+      <header class="facts-toolbar">
+        <div>
+          <span class="eyebrow">APPLICATION FACTS</span>
+          <h2>网申通用事实表</h2>
+          <p id="factsMeta">正在读取本地事实真源</p>
+        </div>
+        <div class="facts-tools">
+          <div id="factsPreviewTools" class="facts-preview-tools">
+            <label class="search-field"><span class="visually-hidden">搜索网申事实</span><span aria-hidden="true">⌕</span><input id="factsSearch" type="search" placeholder="搜索字段、经历或内容" autocomplete="off"></label>
+            <label class="sensitive-toggle"><input id="showSensitive" type="checkbox"><span>显示敏感字段</span></label>
+            <button id="editFacts" class="facts-edit-button" type="button">编辑 Markdown</button>
+          </div>
+          <div id="factsEditTools" class="facts-edit-tools hidden">
+            <span id="factsEditState">未保存</span>
+            <button id="cancelFactsEdit" type="button">取消</button>
+            <button id="saveFacts" class="primary" type="button">保存</button>
+          </div>
+        </div>
+      </header>
+      <div class="facts-layout">
+        <nav id="factsNav" class="facts-nav" aria-label="事实表分组"></nav>
+        <div id="factsContent" class="facts-content"></div>
+        <div id="factsEditorPane" class="facts-editor-pane hidden">
+          <textarea id="factsEditor" spellcheck="false" aria-label="编辑网申事实库 Markdown"></textarea>
+        </div>
+      </div>
+    </section>
+  </main>
+  <dialog id="columnDialog" class="editor-dialog" aria-labelledby="columnDialogTitle">
+    <form id="columnForm" method="dialog">
+      <header><div><span class="eyebrow">TABLE COLUMN</span><h2 id="columnDialogTitle">新增列</h2></div><button class="dialog-close" type="button" data-close-dialog="columnDialog" aria-label="关闭">×</button></header>
+      <label>列名<input id="columnLabel" required maxlength="40" autocomplete="off"></label>
+      <label>类型<select id="columnKind"><option value="text">单行文本</option><option value="textarea">多行文本</option><option value="select">单选</option><option value="url">链接</option><option value="datetime">日期时间</option></select></label>
+      <label id="columnOptionsField" class="hidden">选项<textarea id="columnOptions" rows="5" placeholder="每行一个选项"></textarea></label>
+      <label>列宽<input id="columnWidth" type="number" min="90" max="600" step="10" value="160"></label>
+      <div id="columnOrderActions" class="column-order-actions hidden"><button id="moveColumnLeft" type="button">← 左移</button><button id="moveColumnRight" type="button">右移 →</button></div>
+      <footer><button id="deleteColumn" class="danger-action hidden" type="button">删除列</button><span></span><button type="button" data-close-dialog="columnDialog">取消</button><button id="saveColumn" class="primary" type="submit">保存</button></footer>
+    </form>
+  </dialog>
+  <dialog id="rowDialog" class="editor-dialog" aria-labelledby="rowDialogTitle">
+    <form id="rowForm" method="dialog">
+      <header><div><span class="eyebrow">POSITION</span><h2 id="rowDialogTitle">新增岗位</h2></div><button class="dialog-close" type="button" data-close-dialog="rowDialog" aria-label="关闭">×</button></header>
+      <div class="dialog-grid"><label>公司<input id="draftCompany" required autocomplete="organization"></label><label>岗位<input id="draftRole" required autocomplete="off"></label></div>
+      <div class="dialog-grid"><label>推荐动作<select id="draftRecommendation"></select></label><label>截止 / 提醒<input id="draftDeadline" type="datetime-local"></label></div>
+      <label>投递链接<input id="draftUrl" type="url" placeholder="https://"></label>
+      <label>岗位 JD<textarea id="draftJd" rows="6"></textarea></label>
+      <footer><span></span><span></span><button type="button" data-close-dialog="rowDialog">取消</button><button id="saveDraft" class="primary" type="submit">创建</button></footer>
+    </form>
+  </dialog>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
