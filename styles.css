@@ -184,6 +184,8 @@ tr:hover .application-link-actions { background: #f7f2ec; }
 .column-order-actions { display: flex; gap: 8px; }
 
 html[data-mode="web"] .top-tabs { pointer-events: none; }
+html[data-mode="web"] .top-tabs .web-lark-link { pointer-events: auto; position: relative; display: inline-flex; align-items: center; min-width: 78px; padding: 0 2px; color: var(--ink-soft); font-size: 14px; text-decoration: none; }
+html[data-mode="web"] .top-tabs .web-lark-link:hover { color: var(--ink); }
 html[data-mode="web"] .filter-tools > select { height: 40px; padding: 0 34px 0 11px; border: 1px solid var(--line); border-radius: var(--radius); appearance: none; background: var(--paper); font-size: 13px; }
 .web-related { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .web-related > div { display: grid; gap: 3px; }
