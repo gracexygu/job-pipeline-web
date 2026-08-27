@@ -56,18 +56,3 @@ export function migrateWebState(value) {
   }
   return state;
 }
-
-export function createSampleState() {
-  const state = createWebState("sample");
-  const timestamp = isoNow();
-  const first = newId("position");
-  const second = newId("position");
-  state.positions = [
-    { id: first, company: "星河科技", role_name: "产品培训生", stage: "待测评", deadline: "2026-09-18T18:00:00+08:00", recommendation: "准备测评", official_url: "", jd: "SAMPLE：虚构岗位说明", assessment_content: "在线能力测评", assessment_start: "", category: "产品", stage_notes: [], final_result: "未定", deleted_at: null, local_revision: 1, created_at: timestamp, updated_at: timestamp },
-    { id: second, company: "远岸网络", role_name: "用户研究实习生", stage: "面试中", deadline: "2026-09-21T18:00:00+08:00", recommendation: "准备面试", official_url: "", jd: "SAMPLE：虚构岗位说明", assessment_content: "", assessment_start: "", category: "研究", stage_notes: [], final_result: "未定", deleted_at: null, local_revision: 1, created_at: timestamp, updated_at: timestamp },
-  ];
-  state.assessments = [{ id: newId("assessment"), position_id: first, title: "在线能力测评", due_at: "2026-09-12T18:00:00+08:00", status: "待完成", notes: "SAMPLE：虚构示例", created_at: timestamp, updated_at: timestamp }];
-  state.interviewRounds = [{ id: newId("round"), position_id: second, sequence: 1, stage: "一面", scheduled_at: "2026-09-14T10:00:00+08:00", status: "待进行", notes: "SAMPLE：虚构示例", created_at: timestamp, updated_at: timestamp }];
-  state.events = [{ id: newId("event"), position_id: first, type: "created", detail: "载入虚构 SAMPLE 数据", created_at: timestamp }];
-  return state;
-}

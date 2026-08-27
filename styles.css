@@ -651,3 +651,24 @@ code { overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo
 }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+
+.web-import-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
+.web-import-controls label, .web-import-mapping label { display: grid; gap: 5px; color: var(--ink-soft); font-size: 12px; }
+.web-import-controls select, .web-import-mapping select { width: 100%; height: 36px; padding: 0 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); }
+.web-import-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.web-import-section h3 { margin: 0 0 3px; font: 600 13px/1.4 inherit; }
+.web-import-section p { margin: 0 0 10px; color: var(--ink-soft); font-size: 12px; }
+.web-import-mapping { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.web-import-mapping em { color: var(--terracotta); font-style: normal; }
+.web-import-warning, .web-import-messages { color: var(--ochre) !important; }
+.web-import-messages { margin: 8px 0; padding-left: 18px; font-size: 12px; line-height: 1.6; }
+.web-import-preview { max-height: 210px; overflow: auto; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); }
+.web-import-preview table { width: 100%; min-width: 560px; }
+.web-import-preview th { position: static; height: 34px; }
+.web-import-preview td { height: 36px; }
+.empty > div { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
+.empty .add-position { height: 34px; }
+
+@media (max-width: 700px) {
+  .web-import-controls, .web-import-mapping { grid-template-columns: 1fr; }
+}

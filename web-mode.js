@@ -1,10 +1,12 @@
-import { WEB_COLUMNS, WEB_STAGES, canWebTransition, createSampleState, createWebState, isoNow, normalizeWebImport } from "./data-contract.js";
+import { WEB_COLUMNS, WEB_STAGES, canWebTransition, createWebState, isoNow, normalizeWebImport } from "./data-contract.js";
 import { IndexedDBStore, RevisionConflictError } from "./data-store.js";
 import { addAssessment as addAssessmentRecord, addInterviewRound, createPosition, restorePosition as restorePositionRecord, softDeletePosition, updatePosition } from "./web-operations.js";
+import { IMPORT_FIELDS, buildImportPlan, defaultMapping, displayValue, parseCsv } from "./tabular-import.js";
 
 const store = new IndexedDBStore();
 const channel = "BroadcastChannel" in window ? new BroadcastChannel("job-pipeline-web-sync") : null;
 const state = { data: null, stage: "", q: "", recommendation: "", sort: "updated" };
+let importDraft = null;
 const $ = selector => document.querySelector(selector);
 const esc = (value = "") => String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 
@@ -50,18 +52,21 @@ function configureShell() {
   $("#webBackup").onclick = exportData;
   $("#webData").onclick = () => $("#webDataDialog").showModal();
   $("#rowDialog").innerHTML = rowDialogMarkup();
-  document.body.insertAdjacentHTML("beforeend", dataDialogMarkup() + conflictDialogMarkup());
+  document.body.insertAdjacentHTML("beforeend", dataDialogMarkup() + tabularImportMarkup() + conflictDialogMarkup());
   $("#webRowForm").onsubmit = savePosition;
   $("#webAddAssessment").onclick = addAssessment;
   $("#webAddInterview").onclick = addInterview;
   $("#webDelete").onclick = softDelete;
   $("#webDataForm").onsubmit = importData;
-  $("#webSample").onclick = () => replaceData(createSampleState(), "已载入虚构 SAMPLE 数据。");
+  $("#webTableImport").onclick = () => $("#webTableImportFile").click();
+  $("#webTableImportFile").onchange = openTabularImport;
+  $("#webTableImportConfirm").onclick = confirmTabularImport;
   $("#webBlank").onclick = () => replaceData(createWebState(), "已切换为空白本地数据。");
   $("#webClear").onclick = clearData;
   $("#webTrash").onclick = showTrash;
   $("#webReloadConflict").onclick = () => { $("#webConflictDialog").close(); reload(); };
   document.querySelectorAll("[data-web-close]").forEach(button => button.onclick = () => button.closest("dialog").close());
+  document.querySelectorAll("[data-table-import-close]").forEach(button => button.onclick = () => $("#webTableImportDialog").close());
 }
 
 function rowDialogMarkup() {
@@ -69,7 +74,11 @@ function rowDialogMarkup() {
 }
 
 function dataDialogMarkup() {
-  return "<dialog id=\"webDataDialog\" class=\"editor-dialog\"><form id=\"webDataForm\" method=\"dialog\"><header><div><span class=\"eyebrow\">WEB DATA</span><h2>本地数据与恢复</h2></div><button class=\"dialog-close\" type=\"button\" data-web-close aria-label=\"关闭\">×</button></header><p class=\"web-data-copy\">数据仅保存在当前浏览器。未备份表示尚未导出可恢复的 JSON。</p><label>恢复 JSON<input id=\"webImportFile\" type=\"file\" accept=\"application/json,.json\"></label><div class=\"web-data-actions\"><button id=\"webSample\" class=\"secondary-action\" type=\"button\">使用虚构 SAMPLE 数据</button><button id=\"webBlank\" class=\"secondary-action\" type=\"button\">切换为空白本地数据</button><button id=\"webTrash\" class=\"secondary-action\" type=\"button\">查看回收站</button><button id=\"webClear\" class=\"danger-action\" type=\"button\">清空本地数据</button></div><div id=\"webTrashList\" class=\"web-trash-list\"></div><footer><span></span><button type=\"button\" data-web-close>关闭</button><button class=\"primary\" type=\"submit\">导入 JSON</button></footer></form></dialog>";
+  return "<dialog id=\"webDataDialog\" class=\"editor-dialog\"><form id=\"webDataForm\" method=\"dialog\"><header><div><span class=\"eyebrow\">WEB DATA</span><h2>本地数据与恢复</h2></div><button class=\"dialog-close\" type=\"button\" data-web-close aria-label=\"关闭\">×</button></header><p class=\"web-data-copy\">数据仅保存在当前浏览器。可导入飞书导出的 Excel 或本地 Excel / CSV；JSON 用于完整恢复。</p><input id=\"webTableImportFile\" type=\"file\" accept=\".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\" hidden><label>恢复 JSON<input id=\"webImportFile\" type=\"file\" accept=\"application/json,.json\"></label><div class=\"web-data-actions\"><button id=\"webTableImport\" class=\"secondary-action\" type=\"button\">导入 Excel / CSV</button><button id=\"webBlank\" class=\"secondary-action\" type=\"button\">切换为空白本地数据</button><button id=\"webTrash\" class=\"secondary-action\" type=\"button\">查看回收站</button><button id=\"webClear\" class=\"danger-action\" type=\"button\">清空本地数据</button></div><div id=\"webTrashList\" class=\"web-trash-list\"></div><footer><span></span><button type=\"button\" data-web-close>关闭</button><button class=\"primary\" type=\"submit\">导入 JSON</button></footer></form></dialog>";
+}
+
+function tabularImportMarkup() {
+  return "<dialog id=\"webTableImportDialog\" class=\"editor-dialog\"><form method=\"dialog\"><header><div><span class=\"eyebrow\">TABLE IMPORT</span><h2 id=\"webTableImportTitle\">导入表格</h2></div><button class=\"dialog-close\" type=\"button\" data-table-import-close aria-label=\"关闭\">×</button></header><div id=\"webTableImportContent\"></div><footer><span></span><button type=\"button\" data-table-import-close>取消</button><button id=\"webTableImportConfirm\" class=\"primary\" type=\"button\">确认导入</button></footer></form></dialog>";
 }
 
 function conflictDialogMarkup() {
@@ -78,7 +87,7 @@ function conflictDialogMarkup() {
 
 function render() {
   const metadata = state.data.metadata;
-  $("#importMeta").textContent = metadata.mode === "sample" ? "SAMPLE · 虚构示例数据" : "LOCAL · 当前浏览器" + (metadata.lastBackupAt ? " · 已备份" : " · 未备份");
+  $("#importMeta").textContent = "LOCAL · 当前浏览器" + (metadata.lastBackupAt ? " · 已备份" : " · 未备份");
   renderStages();
   renderRows();
 }
@@ -100,9 +109,12 @@ function renderRows() {
   $("#resultCount").textContent = positions.length + " 条";
   $("#columnHeaders").innerHTML = WEB_COLUMNS.map(column => "<th style=\"width:" + column.width + "px\"><div class=\"column-heading\"><span class=\"column-label\">" + column.label + "</span></div></th>").join("") + "<th class=\"row-actions-heading\"></th>";
   $(".data-grid").style.width = "max(100%, " + WEB_COLUMNS.reduce((sum, column) => sum + column.width, 44) + "px)";
-  $("#rows").innerHTML = positions.map(position => "<tr data-web-id=\"" + position.id + "\">" + WEB_COLUMNS.map(column => cell(position, column)).join("") + "<td class=\"row-actions\"><button class=\"delete-position\" data-web-edit=\"" + position.id + "\" title=\"编辑岗位\" aria-label=\"编辑岗位\">•••</button></td></tr>").join("") || "<tr class=\"no-results\"><td colspan=\"" + (WEB_COLUMNS.length + 1) + "\"><div class=\"empty\"><strong>没有匹配岗位</strong><p>新增岗位，或调整阶段和搜索词</p></div></td></tr>";
+  const empty = state.data.positions.length ? "<strong>没有匹配岗位</strong><p>调整阶段或搜索词后再试。</p>" : "<strong>从第一条岗位开始</strong><p>可导入已有的飞书或 Excel 投递表，也可手动新增。</p><div><button id=\"webEmptyImport\" class=\"secondary-action\" type=\"button\">导入 Excel / CSV</button><button id=\"webEmptyAdd\" class=\"add-position\" type=\"button\">新增岗位</button></div>";
+  $("#rows").innerHTML = positions.map(position => "<tr data-web-id=\"" + position.id + "\">" + WEB_COLUMNS.map(column => cell(position, column)).join("") + "<td class=\"row-actions\"><button class=\"delete-position\" data-web-edit=\"" + position.id + "\" title=\"编辑岗位\" aria-label=\"编辑岗位\">•••</button></td></tr>").join("") || "<tr class=\"no-results\"><td colspan=\"" + (WEB_COLUMNS.length + 1) + "\"><div class=\"empty\">" + empty + "</div></td></tr>";
   document.querySelectorAll("[data-web-edit]").forEach(button => button.onclick = () => openPosition(button.dataset.webEdit));
   document.querySelectorAll("[data-web-cell]").forEach(cell => cell.onclick = () => openPosition(cell.closest("tr").dataset.webId));
+  $("#webEmptyImport") && ($("#webEmptyImport").onclick = () => $("#webTableImportFile").click());
+  $("#webEmptyAdd") && ($("#webEmptyAdd").onclick = () => openPosition());
 }
 
 function cell(position, column) {
@@ -175,23 +187,93 @@ async function addInterview() {
   openPosition(id);
 }
 
+async function parseTabularFile(file) {
+  if (/\.csv$/i.test(file.name) || file.type === "text/csv") return [{ name: "CSV", rows: parseCsv(await file.text()) }];
+  if (!/\.xlsx$/i.test(file.name)) throw new Error("请选择 .xlsx 或 .csv 文件。" );
+  if (typeof globalThis.readXlsxFile !== "function") throw new Error("Excel 解析器未能载入，请刷新页面后重试。" );
+  const parsed = await globalThis.readXlsxFile(file);
+  return parsed[0]?.data ? parsed.map(sheet => ({ name: sheet.name || "工作表", rows: sheet.data })) : [{ name: "工作表", rows: parsed }];
+}
+
+function selectedSheet() { return importDraft.sheets[importDraft.sheetIndex]; }
+
+function tableForSheet(sheet) {
+  const headerIndex = sheet.rows.findIndex(row => row.some(cell => displayValue(cell)));
+  return headerIndex < 0 ? { headers: [], rows: [] } : { headers: sheet.rows[headerIndex].map(displayValue), rows: sheet.rows.slice(headerIndex + 1) };
+}
+
+function tableImportPlan() {
+  const { headers, rows } = tableForSheet(selectedSheet());
+  return buildImportPlan({ headers, rows, mapping: importDraft.mapping, existingPositions: importDraft.strategy === "replace" ? [] : state.data.positions, duplicatePolicy: importDraft.duplicatePolicy });
+}
+
+function renderTabularImport() {
+  const { headers } = tableForSheet(selectedSheet());
+  const plan = tableImportPlan();
+  $("#webTableImportTitle").textContent = "导入 " + importDraft.fileName;
+  const sheetSelect = importDraft.sheets.length > 1 ? `<label>工作表<select id="webImportSheet">${importDraft.sheets.map((sheet, index) => `<option value="${index}" ${index === importDraft.sheetIndex ? "selected" : ""}>${esc(sheet.name)}（${Math.max(sheet.rows.length - 1, 0)} 行）</option>`).join("")}</select></label>` : "";
+  const mapping = IMPORT_FIELDS.map(field => `<label>${field.label}${field.required ? " <em>必填</em>" : ""}<select data-import-field="${field.key}"><option value="-1">不导入</option>${headers.map((header, index) => `<option value="${index}" ${importDraft.mapping[field.key] === index ? "selected" : ""}>${esc(header || `第 ${index + 1} 列`)}</option>`).join("")}</select></label>`).join("");
+  const messages = [...plan.conversions, ...plan.warnings, ...plan.skipped.slice(0, 3).map(item => `第 ${item.rowNumber} 行：${item.reason}`)];
+  const preview = plan.records.slice(0, 5).map(record => `<tr><td>${record.rowNumber}</td><td>${esc(record.company)}</td><td>${esc(record.role_name)}</td><td>${esc(record.stage)}</td><td>${esc(record.deadline ? record.deadline.slice(0, 10) : "-")}</td></tr>`).join("");
+  $("#webTableImportContent").innerHTML = `<div class="web-import-controls">${sheetSelect}<label>导入方式<select id="webImportStrategy"><option value="append" ${importDraft.strategy === "append" ? "selected" : ""}>追加到当前看板</option><option value="replace" ${importDraft.strategy === "replace" ? "selected" : ""}>替换当前岗位</option></select></label><label>重复岗位<select id="webDuplicatePolicy"><option value="skip" ${importDraft.duplicatePolicy === "skip" ? "selected" : ""}>跳过同公司同岗位</option><option value="keep" ${importDraft.duplicatePolicy === "keep" ? "selected" : ""}>保留全部记录</option></select></label></div><section class="web-import-section"><h3>字段识别</h3><p>公司和岗位为必填项，可按你的表头调整。</p><div class="web-import-mapping">${mapping}</div></section><section class="web-import-section"><h3>导入预览</h3><p><b>${plan.records.length}</b> 条岗位将导入${plan.skipped.length ? `，${plan.skipped.length} 行将跳过` : ""}。</p>${plan.unmappedHeaders.length ? `<p class="web-import-warning">未映射列：${esc(plan.unmappedHeaders.join("、"))}</p>` : ""}${messages.length ? `<ul class="web-import-messages">${messages.map(message => `<li>${esc(message)}</li>`).join("")}</ul>` : ""}<div class="web-import-preview"><table><thead><tr><th>行</th><th>公司</th><th>岗位</th><th>阶段</th><th>截止</th></tr></thead><tbody>${preview || "<tr><td colspan=5>没有可导入的岗位，请检查必填字段映射。</td></tr>"}</tbody></table></div></section>`;
+  $("#webTableImportConfirm").disabled = plan.records.length === 0;
+  $("#webImportSheet")?.addEventListener("change", event => { importDraft.sheetIndex = Number(event.target.value); importDraft.mapping = defaultMapping(tableForSheet(selectedSheet()).headers); renderTabularImport(); });
+  document.querySelectorAll("[data-import-field]").forEach(select => select.onchange = () => { importDraft.mapping[select.dataset.importField] = Number(select.value); renderTabularImport(); });
+  $("#webImportStrategy").onchange = event => { importDraft.strategy = event.target.value; renderTabularImport(); };
+  $("#webDuplicatePolicy").onchange = event => { importDraft.duplicatePolicy = event.target.value; renderTabularImport(); };
+}
+
+async function openTabularImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    const sheets = await parseTabularFile(file);
+    const first = sheets.find(sheet => tableForSheet(sheet).headers.length) || sheets[0];
+    importDraft = { fileName: file.name, sheets, sheetIndex: sheets.indexOf(first), mapping: defaultMapping(tableForSheet(first).headers), strategy: "append", duplicatePolicy: "skip" };
+    $("#webDataDialog").close();
+    renderTabularImport();
+    $("#webTableImportDialog").showModal();
+  } catch (error) { status(error.message || "无法读取文件。", true); }
+  event.target.value = "";
+}
+
+async function confirmTabularImport() {
+  const plan = tableImportPlan();
+  if (!plan.records.length) return;
+  const backupAt = isoNow();
+  if (importDraft.strategy === "replace" && currentPositions().length) {
+    const backup = structuredClone(state.data);
+    backup.metadata.lastBackupAt = backupAt;
+    downloadJson(backup, "job-pipeline-before-import-" + backupAt.slice(0, 10) + ".json");
+  }
+  let next = importDraft.strategy === "replace" ? createWebState() : structuredClone(state.data);
+  for (const record of plan.records) next = createPosition(next, record);
+  next.metadata = { ...next.metadata, mode: "local", lastBackupAt: importDraft.strategy === "replace" && currentPositions().length ? backupAt : next.metadata.lastBackupAt };
+  const saved = await commit(() => next);
+  if (saved) { $("#webTableImportDialog").close(); status(`已导入 ${plan.records.length} 条岗位${plan.skipped.length ? `，跳过 ${plan.skipped.length} 条` : ""}。`); }
+}
+
 async function reload() {
   try {
     const existing = await store.read();
-    state.data = existing || await store.write(createSampleState(), null);
+    state.data = existing || await store.write(createWebState(), null);
     render();
   } catch (error) { status("无法读取浏览器本地数据：" + error.message, true); }
+}
+
+function downloadJson(snapshot, filename) {
+  const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
 }
 
 function exportData() {
   const backup = structuredClone(state.data);
   backup.metadata.lastBackupAt = isoNow();
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "job-pipeline-data-v1-" + new Date().toISOString().slice(0, 10) + ".json";
-  link.click();
-  URL.revokeObjectURL(link.href);
+  downloadJson(backup, "job-pipeline-data-v1-" + new Date().toISOString().slice(0, 10) + ".json");
   commit(data => ({ ...data, metadata: { ...data.metadata, lastBackupAt: backup.metadata.lastBackupAt } }));
   status("已导出 JSON 备份。");
 }
