@@ -10,10 +10,12 @@ export const IMPORT_FIELDS = [
   { key: "category", label: "方向", aliases: ["方向", "岗位方向", "职能", "类别"] },
   { key: "jd", label: "岗位 JD / 备注", aliases: ["岗位jd", "jd", "岗位描述", "备注", "阶段备注", "备注信息"] },
   { key: "assessment_content", label: "测评内容", aliases: ["测评", "测评内容", "笔试内容", "在线测评"] },
+  { key: "match_reason", label: "匹配理由", aliases: ["匹配理由", "推荐理由", "匹配度说明", "matchreason"] },
+  { key: "source_evidence", label: "来源证据", aliases: ["来源证据", "信息来源", "来源", "sourceevidence"] },
 ];
 
 const stageAliases = new Map([
-  ["待确认", "待投递"], ["检索新机会", "待投递"], ["待投递", "待投递"], ["未投递", "待投递"],
+  ["待确认", "待确认"], ["检索新机会", "待确认"], ["待投递", "待投递"], ["未投递", "待投递"],
   ["已投递", "筛选中"], ["筛选中", "筛选中"], ["简历筛选", "筛选中"], ["简历筛选中", "筛选中"],
   ["待测评", "待测评"], ["测评中", "待测评"], ["笔试", "待测评"], ["在线测评", "待测评"],
   ["面试中", "面试中"],
@@ -77,7 +79,7 @@ export function buildImportPlan({ headers, rows, mapping, existingPositions = []
     const duplicate = existing.has(keyFor(company, role_name)) || imported.has(keyFor(company, role_name));
     if (duplicate && duplicatePolicy === "skip") { skipped.push({ rowNumber, reason: "与现有或本次导入岗位重复" }); return; }
     imported.add(keyFor(company, role_name));
-    records.push({ company, role_name, stage: WEB_STAGES.includes(stageInfo.stage) ? stageInfo.stage : "待投递", deadline: deadlineDate ? `${deadlineDate}T23:59:00+08:00` : "", recommendation: rowValue(row, mapping, "recommendation"), official_url: rowValue(row, mapping, "official_url"), category: rowValue(row, mapping, "category"), jd: rowValue(row, mapping, "jd"), assessment_content: rowValue(row, mapping, "assessment_content"), rowNumber, duplicate });
+    records.push({ company, role_name, stage: stageInfo.stage === "待确认" ? "待确认" : WEB_STAGES.includes(stageInfo.stage) ? stageInfo.stage : "待投递", deadline: deadlineDate ? `${deadlineDate}T23:59:00+08:00` : "", recommendation: rowValue(row, mapping, "recommendation"), official_url: rowValue(row, mapping, "official_url"), category: rowValue(row, mapping, "category"), jd: rowValue(row, mapping, "jd"), assessment_content: rowValue(row, mapping, "assessment_content"), match_reason: rowValue(row, mapping, "match_reason"), source_evidence: rowValue(row, mapping, "source_evidence"), rowNumber, duplicate });
   });
   return { records, skipped, warnings, conversions, unmappedHeaders };
 }

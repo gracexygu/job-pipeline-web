@@ -1,4 +1,4 @@
-import { createWebState, normalizeWebImport, assertWebState, isoNow } from "./data-contract.js";
+import { createWebState, normalizeWebImport, isoNow } from "./data-contract.js";
 
 const DB_NAME = "job-pipeline-web";
 const STORE_NAME = "state";
@@ -35,7 +35,7 @@ export class IndexedDBStore {
     const db = await this.open();
     return new Promise((resolve, reject) => {
       const request = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).get(ROOT_KEY);
-      request.onsuccess = () => resolve(request.result ? assertWebState(request.result) : null);
+      request.onsuccess = () => resolve(request.result ? normalizeWebImport(request.result) : null);
       request.onerror = () => reject(request.error);
     });
   }

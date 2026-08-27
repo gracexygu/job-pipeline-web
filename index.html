@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#f3f1eb">
-  <title>Local Job Pipeline</title>
+  <title>Job Pipeline</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="./styles.css">
 </head>
@@ -23,7 +23,8 @@
       <button data-view="application">网申投递</button>
     </nav>
     <div class="header-meta">
-      <span class="source-status"><i aria-hidden="true"></i><span id="importMeta">正在载入本地数据</span></span>
+      <span class="source-status"><i aria-hidden="true"></i><span id="importMeta">正在载入浏览器数据</span></span>
+      <button id="webData" class="secondary-action" type="button">导入 Excel / CSV</button>
       <button id="refresh" class="icon-button" title="刷新数据" aria-label="刷新数据">↻</button>
     </div>
   </header>
@@ -66,12 +67,13 @@
         <div>
           <span class="eyebrow">APPLICATION FACTS</span>
           <h2>网申通用事实表</h2>
-          <p id="factsMeta">正在读取本地事实真源</p>
+          <p id="factsMeta">正在读取当前浏览器中的 Markdown</p>
         </div>
         <div class="facts-tools">
           <div id="factsPreviewTools" class="facts-preview-tools">
             <label class="search-field"><span class="visually-hidden">搜索网申事实</span><span aria-hidden="true">⌕</span><input id="factsSearch" type="search" placeholder="搜索字段、经历或内容" autocomplete="off"></label>
             <label class="sensitive-toggle"><input id="showSensitive" type="checkbox"><span>显示敏感字段</span></label>
+            <button id="importFacts" class="facts-edit-button" type="button">导入 Markdown</button>
             <button id="editFacts" class="facts-edit-button" type="button">编辑 Markdown</button>
           </div>
           <div id="factsEditTools" class="facts-edit-tools hidden">
