@@ -47,7 +47,7 @@ function configureShell() {
   $("#search").oninput = event => { state.q = event.target.value; renderRows(); };
   $("#recommendation").innerHTML = "<option value=\"\">全部动作</option><option>立即投递</option><option>补信息</option><option>尽快投递</option><option>准备测评</option><option>准备面试</option><option>跟进</option><option>复盘</option>";
   $("#recommendation").onchange = event => { state.recommendation = event.target.value; renderRows(); };
-  $(".filter-tools").insertAdjacentHTML("beforeend", "<select id=\"webSort\" aria-label=\"排序\"><option value=\"updated\">最近更新</option><option value=\"deadline\">截止时间</option><option value=\"company\">公司名称</option></select><button id=\"webBackup\" class=\"secondary-action\" type=\"button\">导出 JSON</button><button id=\"webData\" class=\"secondary-action\" type=\"button\">本地数据</button>");
+  $(".filter-tools").insertAdjacentHTML("beforeend", "<select id=\"webSort\" aria-label=\"排序\"><option value=\"updated\">最近更新</option><option value=\"deadline\">截止时间</option><option value=\"company\">公司名称</option></select><button id=\"webBackup\" class=\"secondary-action\" type=\"button\">导出 JSON</button><button id=\"webData\" class=\"secondary-action\" type=\"button\">导入 Excel / CSV</button>");
   $("#webSort").onchange = event => { state.sort = event.target.value; renderRows(); };
   $("#webBackup").onclick = exportData;
   $("#webData").onclick = () => $("#webDataDialog").showModal();
