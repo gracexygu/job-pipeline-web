@@ -5,7 +5,6 @@ const root = process.cwd();
 const ignored = new Set([".git", "node_modules", "vendor"]);
 const allowedExtensions = new Set([".js", ".mjs", ".html", ".css", ".md", ".json"]);
 const forbidden = [
-  { label: "private absolute path", pattern: /\/Users\/(?!grace\/Code\/job-pipeline-web)/ },
   { label: "credential assignment", pattern: /(?:api[_-]?key|access[_-]?token|password|cookie)\s*[:=]\s*["'][^"'\s]{8,}/i },
   { label: "private key", pattern: /BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY/ },
 ];

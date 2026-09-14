@@ -7,15 +7,15 @@ description: Help a user maintain the browser-local Job Pipeline board, discover
 
 Work with the public board at https://gracexygu.github.io/job-pipeline-web/.
 
-The board has no account, server, or built-in Agent. Its state belongs to the user's current browser. Do not claim direct access unless a browser-control tool can actually inspect and operate the open page.
+The board runs in the browser and its state belongs to the user's current browser. Report page actions only after a browser-control tool has inspected and operated the open page.
 
 ## Shared boundaries
 
-- Never submit an application, send a message, accept an interview result, or delete records without the user's explicit confirmation.
-- Keep discovered opportunities in `待确认`. Only the user decides whether they enter `待投递`.
-- Preserve original URLs and visible evidence. Mark missing fields as unknown; do not invent them.
-- After any browser write, read the changed record back and report the fields that were saved.
-- When browser control is unavailable, return an importable UTF-8 CSV instead of pretending the board was changed.
+- Application submissions, messages, interview results, and record deletion require the user's explicit confirmation.
+- Discovered opportunities enter `待确认`; the user decides whether they move to `待投递`.
+- Preserve original URLs and visible evidence. Mark missing fields as unknown.
+- After any browser write, read the changed record back and report the saved fields.
+- When browser control is unavailable, return an importable UTF-8 CSV with the same fields.
 
 ## Choose the workflow
 
@@ -60,4 +60,4 @@ Before replacing, preserve the automatically downloaded JSON recovery file. Afte
 
 ## CSV fallback
 
-Use UTF-8 CSV. Quote values containing commas, quotes, or line breaks and double embedded quotes. Do not include private data that is unrelated to the application record.
+Use UTF-8 CSV. Quote values containing commas, quotes, or line breaks and double embedded quotes. Keep the rows focused on the application record.

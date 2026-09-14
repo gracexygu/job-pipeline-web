@@ -42,6 +42,7 @@ document.querySelector("#factsEditor").onkeydown = event => {
 document.querySelector("#columnKind").onchange = renderColumnOptionsField;
 document.querySelector("#columnForm").onsubmit = event => { event.preventDefault(); saveColumn(); };
 document.querySelector("#rowForm").onsubmit = event => { event.preventDefault(); createPosition(); };
+document.querySelector("#sourceForm").onsubmit = event => { event.preventDefault(); createSource(); };
 document.querySelector("#deleteColumn").onclick = deleteColumn;
 document.querySelector("#moveColumnLeft").onclick = () => moveColumn(-1);
 document.querySelector("#moveColumnRight").onclick = () => moveColumn(1);
@@ -650,11 +651,26 @@ function renderSources() {
   const awaitingAgent = run?.executor === "assisted" && run.status === "queued" && run.phase === "awaiting_agent";
   target.innerHTML = `<div class="sources-head discovery-head"><div><span class="eyebrow">OPPORTUNITY SEARCH</span><h2>检索新机会</h2><p>${discoverySubtitle(run)}</p></div><button id="startDiscovery" class="discovery-action" type="button" ${active && !awaitingAgent ? "disabled" : ""}>${active ? awaitingAgent ? "重新复制任务" : "正在检索" : "检索新机会"}</button></div>
     ${discoveryRunView(run)}
-    <div class="source-list-head"><div><span class="eyebrow">SOURCES</span><h3>稳定信息源</h3></div><span>${state.sources.length} 个</span></div>
+    <div class="source-list-head"><div><span class="eyebrow">SOURCES</span><h3>稳定信息源</h3></div><div><span>${state.sources.length} 个</span><button id="addSource" class="secondary-action" type="button"><span aria-hidden="true">＋</span>新增信息源</button></div></div>
     <div class="sources-table-wrap"><table class="sources-table"><thead><tr><th>来源名称</th><th>来源类型</th><th>可信度</th><th>迁移版本</th><th>链接</th></tr></thead><tbody>${rows || '<tr><td colspan="5"><div class="empty">尚未登记稳定信息源</div></td></tr>'}</tbody></table></div>`;
   target.querySelector("#startDiscovery").onclick = startDiscovery;
+  target.querySelector("#addSource").onclick = () => document.querySelector("#sourceDialog").showModal();
   target.querySelectorAll("[data-sync-source]").forEach(button => button.onclick = () => startSourceSync(Number(button.dataset.syncSource), button));
   target.querySelector("[data-open-intents]")?.addEventListener("click", openPendingIntents);
+}
+
+async function createSource() {
+  const form = document.querySelector("#sourceForm");
+  const button = form.querySelector("button.primary");
+  button.disabled = true;
+  try {
+    const result = await fetch("/api/sources", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: document.querySelector("#sourceName").value, url: document.querySelector("#sourceUrl").value, sourceType: document.querySelector("#sourceType").value, credibility: document.querySelector("#sourceCredibility").value }) }).then(assertOk);
+    state.sources.push(result.source);
+    form.reset();
+    document.querySelector("#sourceDialog").close();
+    renderSources();
+    showStatus("信息源已新增");
+  } catch (error) { showError(error); } finally { button.disabled = false; }
 }
 
 function discoveryExecutorLabel(source = "") {

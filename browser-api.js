@@ -102,9 +102,9 @@ function intentView(data, item) {
 function promptFor(run) {
   return `请执行 Job Pipeline 机会检索工作流。
 
-目标：搜索近期适合我的岗位，并完成第一轮筛选。开始前先向我确认目标方向、地区和时间范围；不得替我投递。
+目标：搜索近期适合我的岗位，并完成第一轮筛选。开始前先向我确认目标方向、地区和时间范围；投递动作由用户确认后进行。
 
-每条结果必须包含：company、role_name、official_url、match_reason、deadline（如可见）、source_evidence。不要猜测缺失事实，只保留可核验的官方或原始来源链接。
+每条结果必须包含：company、role_name、official_url、match_reason、deadline（如可见）、source_evidence。缺失事实标记为未知，来源使用可核验的官方或原始来源链接。
 
 完成方式：
 1. 如果你能操作当前 Job Pipeline 网页，请把结果登记到“待确认”。
@@ -143,6 +143,13 @@ export async function browserApiFetch(input, options = {}) {
     if (method === "GET" && url.pathname === "/api/discovery-runs/latest") return response({ run: data.discoveryRun });
 
     const inputBody = await body(options);
+    if (method === "POST" && url.pathname === "/api/sources") {
+      const name = String(inputBody.name || "").trim();
+      if (!name) return response({ error: "请填写信息源名称。" }, 400);
+      const source = { id: `source_${crypto.randomUUID()}`, name, url: String(inputBody.url || "").trim(), source_type: String(inputBody.sourceType || inputBody.source_type || "").trim(), credibility: String(inputBody.credibility || "").trim(), source_revision: 0 };
+      const { result } = await mutate(next => { next.sources ||= []; next.sources.push(source); return source; });
+      return response({ source: result }, 201);
+    }
     if (method === "POST" && url.pathname === "/api/positions") {
       const { result } = await mutate(next => newPosition(next, inputBody));
       return response(result, 201);

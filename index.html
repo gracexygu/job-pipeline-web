@@ -114,6 +114,15 @@
       <footer><span></span><span></span><button type="button" data-close-dialog="rowDialog">取消</button><button id="saveDraft" class="primary" type="submit">创建</button></footer>
     </form>
   </dialog>
+  <dialog id="sourceDialog" class="editor-dialog" aria-labelledby="sourceDialogTitle">
+    <form id="sourceForm" method="dialog">
+      <header><div><span class="eyebrow">INFORMATION SOURCE</span><h2 id="sourceDialogTitle">新增信息源</h2></div><button class="dialog-close" type="button" data-close-dialog="sourceDialog" aria-label="关闭">×</button></header>
+      <label>名称<input id="sourceName" required maxlength="160" placeholder="例如：公司招聘官网"></label>
+      <label>链接<input id="sourceUrl" type="url" maxlength="500" placeholder="https://"></label>
+      <div class="dialog-grid"><label>类型<input id="sourceType" maxlength="80" placeholder="官网 / 社区 / 表格"></label><label>可信度<input id="sourceCredibility" maxlength="80" placeholder="已验证 / 待核验"></label></div>
+      <footer><span></span><button type="button" data-close-dialog="sourceDialog">取消</button><button class="primary" type="submit">保存</button></footer>
+    </form>
+  </dialog>
   <script src="./vendor/read-excel-file.min.js"></script>
   <script type="module" src="./app.js"></script>
 </body>
