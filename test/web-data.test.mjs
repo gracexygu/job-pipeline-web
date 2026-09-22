@@ -49,7 +49,7 @@ test("replace import clears pipeline records but preserves columns and applicati
   state.positions.push({ id: 1, company: "旧公司", role_name: "旧岗位", stage: "待投递" });
   state.counters.position = 1;
   const facts = state.applicationFacts.source;
-  applyImport(state, [{ company: "新公司", role_name: "新岗位", stage: "筛选中", deadline: "", recommendation: "", official_url: "", category: "", jd: "", assessment_content: "" }], true);
+  applyImport(state, [{ company: "新公司", role_name: "新岗位", stage: "简历初筛中", deadline: "", recommendation: "", official_url: "", category: "", jd: "", assessment_content: "" }], true);
   assert.deepEqual(state.positions.map(item => item.company), ["新公司"]);
   assert.equal(state.columns.length, 11);
   assert.equal(state.applicationFacts.source, facts);

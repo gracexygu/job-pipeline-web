@@ -1,6 +1,7 @@
 import { markdownSections, renderMarkdownPreview } from "./markdown-preview.js";
 import { browserApiFetch as fetch } from "./browser-api.js";
 import { setupWebTools } from "./web-tools.js";
+import { matchesStageView, POSITION_STAGE_VIEWS, statusesForStageView } from "./stage-views.js";
 const validViews = ["pipeline", "resume", "application"];
 const viewFromLocation = () => {
   const view = new URLSearchParams(location.search).get("view");
@@ -14,17 +15,41 @@ const viewFromLocation = () => {
 };
 const storedCompanySort = localStorage.getItem("job-pipeline-company-sort");
 const storedPositionView = localStorage.getItem("job-pipeline-position-view");
-const state = { positions: [], columns: [], sources: [], intents: [], interviewPipelines: [], resumeLinks: new Map(), applicationFacts: null, factsEditing: false, dashboard: null, discoveryRun: null, view: viewFromLocation(), section: "positions", stage: "", positionView: storedPositionView === "dashboard" ? "dashboard" : "table", recommendation: "", companySort: storedCompanySort === "desc" ? "desc" : "asc", q: "", factsQuery: "", showSensitive: false, loading: false, notesEditing: new Set(), expandedAssessmentId: null, editingColumnId: null };
-const stages = ["待确认", "检索新机会", "全部", "待投递", "筛选中", "待测评", "面试中"];
-const stageTransitions = { "待投递": ["筛选中"], "筛选中": ["待测评", "面试中"], "待测评": ["筛选中"], "面试中": ["面试中"] };
+const state = { positions: [], columns: [], sources: [], intents: [], interviewPipelines: [], resumeLinks: new Map(), applicationFacts: null, factsEditing: false, dashboard: null, discoveryRun: null, view: viewFromLocation(), section: "positions", stage: "", positionView: storedPositionView === "dashboard" ? "dashboard" : "table", recommendation: "", companySort: storedCompanySort === "desc" ? "desc" : "asc", q: "", factsQuery: "", showSensitive: false, loading: false, notesEditing: new Set(), expandedAssessmentId: null, dashboardConfig: loadDashboardConfig(), editingDashboardLaneId: null, dashboardSuppressClickUntil: 0, editingColumnId: null, draggedColumnId: null };
+const stages = ["待确认", "检索新机会", "全部", "待投递", "简历筛选", "待测评", "面试"];
+const stageTransitions = { "待补信息": ["待投递"], "待投递": ["简历初筛中"], "简历初筛中": ["待测评", "业务复筛中", "待面试", "简历挂"], "待测评": ["简历初筛中", "业务复筛中", "待面试", "简历挂"], "业务复筛中": ["待测评", "待面试", "简历挂"], "待面试": ["面试中", "面试挂"], "面试中": ["待面试", "面试挂", "已 Offer"], "简历挂": [], "面试挂": [], "已 Offer": [] };
 const recommendations = ["立即投递", "补信息", "等开放", "准备测评", "准备面试", "跟进", "复盘", "暂不投", "尽快投递"];
 const finalResults = ["未定", "通过", "挂了", "放弃", "岗位关闭", "资格不符", "已 Offer"];
+const dashboardConfigStorageKey = "job-pipeline-dashboard-config-v1";
+const lifecycleStatuses = ["待补信息", "待投递", "简历初筛中", "待测评", "业务复筛中", "待面试", "面试中", "简历挂", "面试挂", "已 Offer"];
+const hiddenDashboardStages = new Set(["待补信息", "待投递"]);
+const legacyDashboardLaneColors = new Set(["#69a6a6", "#6f95d1", "#a78bc6", "#71a86e", "#bd5d3e", "#7392ba", "#a67b76", "#8f80ae", "#6f9478", "#9b7772", "#557d63", "#d97757", "#987267", "#aa835f", "#7b7a68", "#865e55", "#5f715f", "#668fbd", "#8b78a1", "#6f9eb3", "#5f9288", "#786f93", "#5f896a", "#5e98b3", "#747fb4", "#8b75a5"]);
+const defaultDashboardConfig = {
+  lanes: [
+    { id: "screening", name: "简历筛选", color: "#e8b39d", stages: ["简历初筛中", "业务复筛中"] },
+    { id: "resume-rejected", name: "简历挂", color: "#ddb5b5", stages: ["简历挂"] },
+    { id: "assessment", name: "待测评", color: "#e6c39f", stages: ["待测评"] },
+    { id: "interview", name: "面试流程", color: "#c4d2c2", stages: ["待面试", "面试中", "面试挂"] },
+    { id: "result", name: "已 Offer", color: "#c3d6c0", stages: ["已 Offer"] },
+  ],
+  labelOverrides: {},
+  hiddenCompanies: [],
+  hiddenItems: [],
+  itemPlacements: {},
+  itemOrder: {},
+};
+const dashboardInterviewLanes = [
+  { id: "round-group", name: "群面", color: "#d8c4cc", match: /群面|小组面|群体面/ },
+  { id: "round-first", name: "一面", color: "#c1d5de", match: /一面|初面|首面/ },
+  { id: "round-second", name: "二面", color: "#d0c7dc", match: /二面|复面/ },
+];
 const viewIds = { pipeline: "pipelineView", resume: "resumeView", application: "applicationView" };
 let discoveryPoll = null;
 
 document.querySelector("#refresh").onclick = load;
 document.querySelector("#add").onclick = openRowDialog;
 document.querySelector("#addColumn").onclick = () => openColumnDialog();
+document.querySelector("#resetColumns").onclick = resetColumnOrder;
 document.querySelector("#search").oninput = event => { state.q = event.target.value; renderRows(); renderAssessments(); };
 document.querySelector("#recommendation").onchange = event => { state.recommendation = event.target.value; renderRows(); };
 document.querySelector("#factsSearch").oninput = event => { state.factsQuery = event.target.value.trim().toLowerCase(); filterMarkdownPreview(); };
@@ -46,6 +71,10 @@ document.querySelector("#sourceForm").onsubmit = event => { event.preventDefault
 document.querySelector("#deleteColumn").onclick = deleteColumn;
 document.querySelector("#moveColumnLeft").onclick = () => moveColumn(-1);
 document.querySelector("#moveColumnRight").onclick = () => moveColumn(1);
+document.querySelector("#dashboardLaneForm").onsubmit = event => { event.preventDefault(); saveDashboardLane(); };
+document.querySelector("#dashboardLaneDelete").onclick = () => { if (state.editingDashboardLaneId) deleteDashboardLane(state.editingDashboardLaneId); };
+document.querySelector("#dashboardLaneMoveUp").onclick = () => moveDashboardLane(-1);
+document.querySelector("#dashboardLaneMoveDown").onclick = () => moveDashboardLane(1);
 document.querySelectorAll("[data-close-dialog]").forEach(button => {
   button.onclick = () => document.querySelector(`#${button.dataset.closeDialog}`).close();
 });
@@ -149,7 +178,7 @@ function renderStages() {
   document.querySelector("#stages").innerHTML = stages.map(label => {
     const isSource = label === "检索新机会";
     const isIntent = label === "待确认";
-    const isInterview = label === "面试中";
+    const isInterview = label === "面试";
     const active = isIntent ? state.section === "intents" : isSource ? state.section === "sources" : isInterview ? state.section === "interviews" : state.section === "positions" && (label === "全部" ? "" : label) === state.stage;
     return `<button class="${active ? "active" : ""} ${isSource ? "source-tab" : ""}" data-stage="${label}" aria-pressed="${active}">${label}</button>`;
   }).join("");
@@ -158,9 +187,9 @@ function renderStages() {
       state.section = "intents";
     } else if (button.dataset.stage === "检索新机会") {
       state.section = "sources";
-    } else if (button.dataset.stage === "面试中") {
+    } else if (button.dataset.stage === "面试") {
       state.section = "interviews";
-      state.stage = "面试中";
+      state.stage = "面试";
     } else {
       state.section = "positions";
       state.stage = button.dataset.stage === "全部" ? "" : button.dataset.stage;
@@ -202,31 +231,51 @@ function renderSection() {
 function renderDashboard() {
   const target = document.querySelector("#dashboardWorkspace");
   if (!state.dashboard) return;
-  const stageOrder = ["待投递", "筛选中", "待测评", "面试中"];
   const counts = state.dashboard.counts || {};
   const total = state.dashboard.total || 0;
-  const maxCount = Math.max(1, ...stageOrder.map(stage => counts[stage] || 0));
-  const stages = stageOrder.map(stage => `<button class="dashboard-stage" type="button" data-dashboard-stage="${stage}"><span>${stage}</span><strong>${counts[stage] || 0}</strong><i><b style="width:${Math.max(4, ((counts[stage] || 0) / maxCount) * 100)}%"></b></i></button>`).join("");
-  const actionItems = dashboardActions();
-  const deadlines = (state.dashboard.expiring || []).slice(0, 6);
+  const stageGroups = [
+    { key: "待补信息", label: "待补信息", stages: ["待补信息"], color: "#69a6a6" },
+    { key: "待投递", label: "待投递", stages: ["待投递"], color: "#e58c78" },
+    { key: "简历筛选", label: "简历筛选", stages: ["简历初筛中", "业务复筛中", "简历挂"], color: "#6f95d1" },
+    { key: "待测评", label: "待测评", stages: ["待测评"], color: "#a78bc6" },
+    { key: "面试", label: "面试流程", stages: ["待面试", "面试中", "面试挂"], color: "#71a86e" },
+  ].map(group => ({ ...group, count: group.stages.reduce((sum, stage) => sum + (counts[stage] || 0), 0) }));
+  const visibleStageTotal = stageGroups.reduce((sum, group) => sum + group.count, 0);
+  const maxCount = Math.max(1, ...stageGroups.map(group => group.count));
+  const stages = stageGroups.map(group => `<button class="dashboard-stage" type="button" data-dashboard-stage="${group.key}"><span>${group.label}</span><strong>${group.count}</strong><i><b style="width:${Math.max(4, (group.count / maxCount) * 100)}%;background:${group.color}"></b></i></button>`).join("");
   const categories = Object.entries(state.dashboard.categories || {}).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  const stageColors = ["#bd5d3e", "#a77a2a", "#4e7393", "#557961"];
   const categoryColors = ["#557961", "#bd5d3e", "#4e7393", "#a77a2a", "#7b6e8f", "#8b7760"];
-  const pie = dashboardPie(stageOrder.map((stage, index) => ({ label: stage, count: counts[stage] || 0, color: stageColors[index] })), total);
+  const pie = dashboardPie(stageGroups, visibleStageTotal);
   target.innerHTML = `<header class="dashboard-head"><div><span class="eyebrow">APPLICATION OVERVIEW</span><h2>投递仪表盘</h2></div><div class="dashboard-total"><span>全部岗位</span><strong>${total}</strong></div></header>
     <div class="dashboard-stage-grid">${stages}</div>
     <div class="dashboard-chart-grid">
-      <section class="dashboard-panel chart-panel"><header><div><span class="eyebrow">STAGE SHARE</span><h3>投递阶段占比</h3></div><span>${total} 个岗位</span></header><div class="donut-layout"><div class="donut-chart" style="background:${pie.gradient}" role="img" aria-label="${attr(pie.label)}"><div><strong>${total}</strong><span>全部</span></div></div><div class="donut-legend">${stageOrder.map((stage, index) => `<button type="button" data-dashboard-stage="${stage}"><i style="background:${stageColors[index]}"></i><span>${stage}</span><strong>${counts[stage] || 0}</strong><small>${total ? Math.round(((counts[stage] || 0) / total) * 100) : 0}%</small></button>`).join("")}</div></div></section>
+      <section class="dashboard-panel chart-panel"><header><div><span class="eyebrow">STAGE SHARE</span><h3>投递阶段占比</h3></div><span>${visibleStageTotal} 个岗位</span></header><div class="donut-layout"><div class="donut-chart" style="background:${pie.gradient}" role="img" aria-label="${attr(pie.label)}"><div><strong>${visibleStageTotal}</strong><span>流程中</span></div></div><div class="donut-legend">${stageGroups.map(group => `<button type="button" data-dashboard-stage="${group.key}"><i style="background:${group.color}"></i><span>${group.label}</span><strong>${group.count}</strong><small>${visibleStageTotal ? Math.round((group.count / visibleStageTotal) * 100) : 0}%</small></button>`).join("")}</div></div></section>
       <section class="dashboard-panel chart-panel"><header><div><span class="eyebrow">CATEGORY TREEMAP</span><h3>岗位方向树图</h3></div><span>Top ${categories.length}</span></header><div class="treemap">${categories.map(([label, count], index) => `<button type="button" data-dashboard-category="${attr(label)}" style="--tree-color:${categoryColors[index]}"><span>${esc(label)}</span><strong>${count}</strong><small>${total ? Math.round((count / total) * 100) : 0}%</small></button>`).join("") || dashboardEmpty("暂无分类数据")}</div></section>
     </div>
-    <div class="dashboard-layout">
-      <section class="dashboard-panel dashboard-actions-panel"><header><div><span class="eyebrow">NEXT ACTIONS</span><h3>当前队列</h3></div><span>${actionItems.length} 项</span></header><div class="dashboard-list">${actionItems.map(dashboardActionRow).join("") || dashboardEmpty("当前没有紧急队列")}</div></section>
-      <section class="dashboard-panel"><header><div><span class="eyebrow">DEADLINES & REMINDERS</span><h3>7 天内截止 / 提醒</h3></div><span>${(state.dashboard.expiring || []).length} 项</span></header><div class="dashboard-list">${deadlines.map(position => dashboardPositionRow(position, formatDeadline(position.deadline), "deadline")).join("") || dashboardEmpty("近期没有截止或提醒")}</div></section>
-    </div>`;
+    ${renderDashboardBoard()}`;
   target.querySelectorAll("[data-dashboard-stage]").forEach(button => button.onclick = () => openDashboardStage(button.dataset.dashboardStage));
-  target.querySelectorAll("[data-dashboard-action]").forEach(button => button.onclick = () => openDashboardAction(button.dataset.dashboardAction));
-  target.querySelectorAll("[data-dashboard-position]").forEach(button => button.onclick = () => openDashboardPosition(Number(button.dataset.dashboardPosition), button.dataset.dashboardKind));
+  target.querySelectorAll("[data-dashboard-position]").forEach(button => button.onclick = () => {
+    if (state.dashboardSuppressClickUntil > Date.now()) return;
+    openDashboardPosition(Number(button.dataset.dashboardPosition));
+  });
+  target.querySelectorAll("[data-dashboard-hide-item]").forEach(button => button.onclick = () => hideDashboardItem(button.dataset.dashboardHideItem, button.dataset.dashboardItemLabel));
+  target.querySelectorAll("[data-dashboard-item-drag]").forEach(tag => {
+    tag.addEventListener("dragstart", event => dashboardDragStart(event, tag));
+    tag.addEventListener("dragend", dashboardDragEnd);
+  });
+  target.querySelectorAll("[data-dashboard-drop-lane]").forEach(laneItems => {
+    laneItems.addEventListener("dragover", dashboardDragOver);
+    laneItems.addEventListener("dragenter", () => laneItems.classList.add("is-drag-over"));
+    laneItems.addEventListener("dragleave", event => {
+      if (!laneItems.contains(event.relatedTarget)) laneItems.classList.remove("is-drag-over");
+    });
+    laneItems.addEventListener("drop", event => dashboardDrop(event, laneItems));
+  });
+  target.querySelector("[data-dashboard-restore-hidden]")?.addEventListener("click", restoreHiddenDashboardItems);
   target.querySelectorAll("[data-dashboard-category]").forEach(button => button.onclick = () => openDashboardCategory(button.dataset.dashboardCategory));
+  target.querySelector("[data-dashboard-add-lane]")?.addEventListener("click", () => openDashboardLaneDialog());
+  target.querySelectorAll("[data-dashboard-edit-lane]").forEach(button => button.onclick = () => openDashboardLaneDialog(button.dataset.dashboardEditLane));
+  target.querySelectorAll("[data-dashboard-delete-lane]").forEach(button => button.onclick = () => deleteDashboardLane(button.dataset.dashboardDeleteLane));
 }
 
 function dashboardPie(items, total) {
@@ -264,6 +313,329 @@ function dashboardPositionRow(position, meta, kind) {
 }
 
 function dashboardEmpty(label) { return `<div class="dashboard-empty">${label}</div>`; }
+
+function renderDashboardBoard() {
+  const lanes = dashboardDisplayLanes();
+  const projections = dashboardPositionProjections(lanes);
+  const byLane = new Map(lanes.map(lane => [lane.id, []]));
+  for (const projection of projections) {
+    byLane.get(projection.laneId)?.push(projection);
+  }
+  const laneMarkup = lanes.map(lane => dashboardLaneMarkup(lane, byLane.get(lane.id), lane.locked));
+  const hiddenCount = state.dashboardConfig.hiddenCompanies.length + state.dashboardConfig.hiddenItems.length;
+  const restore = hiddenCount ? `<button class="dashboard-restore-hidden" type="button" data-dashboard-restore-hidden>恢复隐藏（${hiddenCount}）</button>` : "";
+  return `<section class="dashboard-panel dashboard-board-panel"><header><div><span class="eyebrow">PROGRESS BOARD</span><h3>求职进度看板</h3><p>岗位级投影来自现有岗位与面试轮次，不改变真实状态。</p></div><div class="dashboard-board-tools"><span>${projections.length} 个流程中岗位</span>${restore}<button class="secondary-action" type="button" data-dashboard-add-lane><span aria-hidden="true">＋</span>新增分层</button></div></header><div class="dashboard-board">${laneMarkup.join("") || dashboardEmpty("暂无流程中岗位")}</div></section>`;
+}
+
+function dashboardDisplayLanes() {
+  const lanes = [];
+  for (const lane of state.dashboardConfig.lanes || []) {
+    lanes.push({ ...lane, locked: false });
+    if (lane.id === "interview") lanes.push(...dashboardInterviewLanes.map(item => ({ ...item, stages: [], locked: true })));
+  }
+  if (!lanes.some(lane => lane.id === "round-first")) lanes.push(...dashboardInterviewLanes.map(item => ({ ...item, stages: [], locked: true })));
+  const offerIndex = lanes.findIndex(lane => lane.id === "result" || lane.name === "已 Offer");
+  if (offerIndex >= 0 && offerIndex !== lanes.length - 1) lanes.push(...lanes.splice(offerIndex, 1));
+  return lanes;
+}
+
+function dashboardPositionProjections(lanes) {
+  const hiddenCompanies = new Set(state.dashboardConfig.hiddenCompanies);
+  const hiddenItems = new Set(state.dashboardConfig.hiddenItems);
+  const laneIds = new Set(lanes.map(lane => lane.id));
+  const expired = [];
+  const projections = [];
+  for (const position of state.positions) {
+    const companyKey = dashboardCompanyKey(position.company);
+    const itemKey = dashboardPositionKey(position);
+    if (!companyKey || !itemKey || hiddenDashboardStages.has(position.stage) || hiddenCompanies.has(companyKey) || hiddenItems.has(itemKey)) continue;
+    const waitingRound = dashboardPendingRound(position);
+    const sourceSignature = [position.id, position.stage, waitingRound?.label || "", waitingRound?.result || ""].map(value => String(value)).join("~");
+    const defaultLaneId = dashboardInterviewLaneId(position) || lanes.find(lane => lane.stages.includes(position.stage))?.id || dashboardFallbackLaneId(position, lanes);
+    const placement = state.dashboardConfig.itemPlacements[itemKey];
+    const placementIsCurrent = placement?.sourceSignature === sourceSignature && laneIds.has(placement.laneId);
+    if (placement && !placementIsCurrent) expired.push(itemKey);
+    projections.push({
+      itemKey,
+      positionId: position.id,
+      company: String(position.company || "").trim(),
+      roleLabel: String(position.role_name || position.role || "").trim(),
+      resultLabel: position.stage === "面试挂" ? "已挂" : "",
+      laneId: placementIsCurrent ? placement.laneId : (laneIds.has(defaultLaneId) ? defaultLaneId : dashboardFallbackLaneId(position, lanes)),
+      sourceSignature,
+      rank: dashboardProjectionRank(defaultLaneId, lanes),
+    });
+  }
+  if (expired.length) {
+    expired.forEach(key => clearDashboardItemPlacement(key));
+    persistDashboardConfig();
+  }
+  return projections;
+}
+
+function dashboardProjectionRank(laneId, lanes) {
+  const fixed = { "resume-rejected": 10, screening: 40, assessment: 50, interview: 60, "round-group": 70, "round-first": 80, "round-second": 90, result: 100 };
+  return fixed[laneId] ?? 30 + Math.max(0, lanes.findIndex(lane => lane.id === laneId));
+}
+
+function dashboardFallbackLaneId(position, lanes) {
+  const preferredId = ["待面试", "面试中", "面试挂"].includes(position.stage)
+    ? "interview"
+    : position.stage === "简历挂" ? "resume-rejected"
+      : position.stage === "待测评" ? "assessment"
+        : ["简历初筛中", "业务复筛中"].includes(position.stage) ? "screening"
+          : position.stage === "已 Offer" ? "result" : "";
+  return lanes.find(lane => lane.id === preferredId)?.id || lanes[0]?.id || "unassigned";
+}
+
+function dashboardCompanyKey(company) {
+  return String(company || "").trim().toLocaleLowerCase("zh-CN");
+}
+
+function dashboardPositionKey(position) {
+  const id = String(position?.id ?? "").trim();
+  if (id) return `position:${id}`;
+  const company = dashboardCompanyKey(position?.company);
+  const role = dashboardCompanyKey(position?.role_name || position?.role);
+  return company && role ? `position:${company}:${role}` : "";
+}
+
+function dashboardLaneMarkup(lane, items = [], locked = false) {
+  const color = safeDashboardColor(lane.color, "#6c8496");
+  const order = state.dashboardConfig.itemOrder[lane.id] || [];
+  const orderedItems = [...items].sort((left, right) => {
+    const leftIndex = order.indexOf(left.itemKey);
+    const rightIndex = order.indexOf(right.itemKey);
+    if (leftIndex < 0 && rightIndex < 0) return 0;
+    if (leftIndex < 0) return 1;
+    if (rightIndex < 0) return -1;
+    return leftIndex - rightIndex;
+  });
+  return `<article class="dashboard-lane" style="--lane-color:${color}"><div class="dashboard-lane-label"><span class="dashboard-lane-name">${esc(lane.name)}</span><small>${items.length} 个岗位</small>${locked ? "" : `<div class="dashboard-lane-actions"><button type="button" class="icon-button" title="编辑分层" aria-label="编辑分层" data-dashboard-edit-lane="${attr(lane.id)}">✎</button><button type="button" class="icon-button" title="删除分层" aria-label="删除分层" data-dashboard-delete-lane="${attr(lane.id)}">×</button></div>`}</div><div class="dashboard-lane-items" data-dashboard-drop-lane="${attr(lane.id)}">${orderedItems.map(dashboardPositionTagMarkup).join("") || '<span class="dashboard-lane-empty">暂无岗位</span>'}</div></article>`;
+}
+
+function dashboardPositionTagMarkup(projection) {
+  const label = [projection.company, projection.roleLabel].filter(Boolean).join(" ");
+  const result = projection.resultLabel ? `<em class="dashboard-tag-result">${esc(projection.resultLabel)}</em>` : "";
+  return `<div class="dashboard-tag${result ? " has-result" : ""}" draggable="true" data-dashboard-item-drag="${attr(projection.itemKey)}" title="拖动以调整看板位置"><button type="button" class="dashboard-tag-main" data-dashboard-position="${attr(projection.positionId)}" data-dashboard-company="${attr(projection.company)}" data-dashboard-role="${attr(projection.roleLabel)}" title="查看 ${attr(label)}"><span class="dashboard-company-name">${esc(label)}</span></button>${result}<button type="button" class="dashboard-tag-dismiss" title="从仪表盘隐藏" aria-label="从仪表盘隐藏 ${attr(label)}" data-dashboard-hide-item="${attr(projection.itemKey)}" data-dashboard-item-label="${attr(label)}">×</button></div>`;
+}
+
+function dashboardDragStart(event, tag) {
+  const key = tag.dataset.dashboardItemDrag;
+  if (!key) return;
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", key);
+  tag.classList.add("is-dragging");
+}
+
+function dashboardDragEnd(event) {
+  event.currentTarget.classList.remove("is-dragging");
+  state.dashboardSuppressClickUntil = Date.now() + 250;
+  document.querySelectorAll(".dashboard-lane-items.is-drag-over").forEach(item => item.classList.remove("is-drag-over"));
+}
+
+function dashboardDragOver(event) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+}
+
+function dashboardDrop(event, laneItems) {
+  event.preventDefault();
+  laneItems.classList.remove("is-drag-over");
+  const itemKey = event.dataTransfer.getData("text/plain");
+  const targetLaneId = laneItems.dataset.dashboardDropLane;
+  if (!itemKey || !targetLaneId) return;
+  const targetTag = event.target.closest(".dashboard-tag");
+  const beforeKey = targetTag?.dataset.dashboardItemDrag && targetTag.dataset.dashboardItemDrag !== itemKey
+    ? targetTag.dataset.dashboardItemDrag
+    : "";
+  moveDashboardItem(itemKey, targetLaneId, beforeKey);
+}
+
+function moveDashboardItem(itemKey, targetLaneId, beforeKey = "") {
+  const lanes = dashboardDisplayLanes();
+  const laneIds = new Set(lanes.map(lane => lane.id));
+  if (!laneIds.has(targetLaneId)) return;
+  const projections = dashboardPositionProjections(lanes);
+  const projection = projections.find(item => item.itemKey === itemKey);
+  if (!projection) return;
+  const targetItems = projections
+    .filter(item => item.laneId === targetLaneId && item.itemKey !== itemKey)
+    .sort((left, right) => dashboardItemOrderIndex(left, targetLaneId) - dashboardItemOrderIndex(right, targetLaneId));
+  const targetKeys = targetItems.map(item => item.itemKey);
+  const insertAt = beforeKey ? targetKeys.indexOf(beforeKey) : -1;
+  targetKeys.splice(insertAt < 0 ? targetKeys.length : insertAt, 0, itemKey);
+  Object.keys(state.dashboardConfig.itemOrder).forEach(laneId => {
+    state.dashboardConfig.itemOrder[laneId] = state.dashboardConfig.itemOrder[laneId].filter(key => key !== itemKey);
+  });
+  state.dashboardConfig.itemOrder[targetLaneId] = targetKeys;
+  state.dashboardConfig.itemPlacements[itemKey] = { laneId: targetLaneId, sourceSignature: projection.sourceSignature };
+  persistDashboardConfig();
+  renderDashboard();
+  showStatus("看板位置已调整，岗位真源未改变");
+}
+
+function dashboardItemOrderIndex(projection, laneId) {
+  const order = state.dashboardConfig.itemOrder[laneId] || [];
+  const index = order.indexOf(projection.itemKey);
+  return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+}
+
+function clearDashboardItemPlacement(itemKey) {
+  delete state.dashboardConfig.itemPlacements[itemKey];
+  Object.keys(state.dashboardConfig.itemOrder).forEach(laneId => {
+    state.dashboardConfig.itemOrder[laneId] = state.dashboardConfig.itemOrder[laneId].filter(key => key !== itemKey);
+  });
+}
+
+function dashboardInterviewLaneId(position) {
+  if (!["待面试", "面试中"].includes(position.stage)) return "";
+  const waitingRound = dashboardPendingRound(position);
+  if (!waitingRound) return "";
+  const label = String(waitingRound.label || "");
+  const groupLane = dashboardInterviewLanes.find(lane => lane.id === "round-group");
+  return (groupLane?.match.test(label) ? groupLane : dashboardInterviewLanes.find(lane => lane.match.test(label)))?.id || "";
+}
+
+function dashboardPendingRound(position) {
+  const pipeline = state.interviewPipelines.find(item => item.id === position.id);
+  return [...(pipeline?.rounds || [])].reverse().find(round => round.result === "未定") || null;
+}
+
+function loadDashboardConfig() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(dashboardConfigStorageKey) || "null");
+    return normalizeDashboardConfig(raw);
+  } catch {
+    return normalizeDashboardConfig(null);
+  }
+}
+
+function normalizeDashboardConfig(raw) {
+  const value = raw && typeof raw === "object" ? raw : {};
+  const storedLanes = Array.isArray(value.lanes) ? value.lanes.map((lane, index) => ({
+    id: String(lane?.id || `lane-${index + 1}`),
+    name: String(lane?.name || `分层 ${index + 1}`).trim().slice(0, 40),
+    color: migrateDashboardLaneColor(String(lane?.id || ""), safeDashboardColor(lane?.color, defaultDashboardConfig.lanes[index % defaultDashboardConfig.lanes.length].color)),
+    stages: [...new Set((Array.isArray(lane?.stages) ? lane.stages : []).filter(stage => lifecycleStatuses.includes(stage)))],
+  })).filter(lane => lane.name) : defaultDashboardConfig.lanes.map(lane => ({ ...lane, stages: [...lane.stages] }));
+  const lanes = normalizeDashboardLanes(storedLanes);
+  const labelOverrides = value.labelOverrides && typeof value.labelOverrides === "object" ? Object.fromEntries(Object.entries(value.labelOverrides).map(([id, override]) => [id, { label: String(override?.label || "").trim().slice(0, 120), note: String(override?.note || "").trim().slice(0, 80) }])) : {};
+  const hiddenCompanies = [...new Set((Array.isArray(value.hiddenCompanies) ? value.hiddenCompanies : []).map(dashboardCompanyKey).filter(Boolean))];
+  const hiddenItems = [...new Set((Array.isArray(value.hiddenItems) ? value.hiddenItems : []).map(item => String(item || "").trim()).filter(Boolean))];
+  const itemPlacements = value.itemPlacements && typeof value.itemPlacements === "object"
+    ? Object.fromEntries(Object.entries(value.itemPlacements).map(([item, placement]) => [String(item || "").trim(), { laneId: String(placement?.laneId || ""), sourceSignature: String(placement?.sourceSignature || "") }]).filter(([item, placement]) => item && placement.laneId && placement.sourceSignature))
+    : {};
+  const itemOrder = value.itemOrder && typeof value.itemOrder === "object"
+    ? Object.fromEntries(Object.entries(value.itemOrder).map(([laneId, keys]) => [String(laneId), [...new Set((Array.isArray(keys) ? keys : []).map(key => String(key || "").trim()).filter(Boolean))]]))
+    : {};
+  return { lanes, labelOverrides, hiddenCompanies, hiddenItems, itemPlacements, itemOrder };
+}
+
+function normalizeDashboardLanes(lanes) {
+  const normalized = lanes.filter(lane => lane.id !== "interview-rejected").map(lane => ({ ...lane, stages: lane.stages.filter(stage => !hiddenDashboardStages.has(stage)) }));
+  const screening = normalized.find(lane => lane.id === "screening");
+  if (screening) screening.stages = screening.stages.filter(stage => stage !== "简历挂");
+  const interview = normalized.find(lane => lane.id === "interview");
+  if (interview && !interview.stages.includes("面试挂")) interview.stages.push("面试挂");
+  const visible = normalized.filter(lane => lane.stages.length || !["apply", "screening", "assessment", "interview", "result"].includes(lane.id));
+  insertDashboardLaneAfter(visible, "screening", defaultDashboardConfig.lanes.find(lane => lane.id === "resume-rejected"));
+  const resultIndex = visible.findIndex(lane => lane.id === "result" || lane.name === "已 Offer");
+  if (resultIndex >= 0 && resultIndex !== visible.length - 1) visible.push(...visible.splice(resultIndex, 1));
+  return visible;
+}
+
+function insertDashboardLaneAfter(lanes, afterId, lane) {
+  if (!lane || lanes.some(item => item.id === lane.id || item.stages.includes(lane.stages[0]))) return;
+  const afterIndex = lanes.findIndex(lane => lane.id === afterId);
+  lanes.splice(afterIndex < 0 ? lanes.length : afterIndex + 1, 0, { ...lane, stages: [...lane.stages] });
+}
+
+function migrateDashboardLaneColor(laneId, color) {
+  const fallback = defaultDashboardConfig.lanes.find(lane => lane.id === laneId)?.color;
+  return fallback && legacyDashboardLaneColors.has(String(color).toLowerCase()) ? fallback : color;
+}
+
+function persistDashboardConfig() {
+  state.dashboardConfig = normalizeDashboardConfig(state.dashboardConfig);
+  localStorage.setItem(dashboardConfigStorageKey, JSON.stringify(state.dashboardConfig));
+}
+
+function safeDashboardColor(value, fallback) {
+  const color = String(value || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(color) ? color : fallback;
+}
+
+function openDashboardLaneDialog(laneId = null) {
+  state.editingDashboardLaneId = laneId;
+  const lane = state.dashboardConfig.lanes.find(item => item.id === laneId);
+  document.querySelector("#dashboardLaneDialogTitle").textContent = lane ? "编辑分层" : "新增分层";
+  document.querySelector("#dashboardLaneName").value = lane?.name || "";
+  document.querySelector("#dashboardLaneColor").value = safeDashboardColor(lane?.color, "#6c8496");
+  document.querySelectorAll("#dashboardLaneStages option").forEach(option => { option.selected = Boolean(lane?.stages.includes(option.value)); });
+  document.querySelector("#dashboardLaneDelete").classList.toggle("hidden", !lane);
+  document.querySelector("#dashboardLaneOrderActions").classList.toggle("hidden", !lane);
+  const index = lane ? state.dashboardConfig.lanes.findIndex(item => item.id === lane.id) : -1;
+  document.querySelector("#dashboardLaneMoveUp").disabled = index <= 0;
+  document.querySelector("#dashboardLaneMoveDown").disabled = index < 0 || index >= state.dashboardConfig.lanes.length - 1;
+  document.querySelector("#dashboardLaneDialog").showModal();
+}
+
+function saveDashboardLane() {
+  const name = document.querySelector("#dashboardLaneName").value.trim();
+  if (!name) return showError(new Error("请填写分层名称"));
+  const lane = { name, color: safeDashboardColor(document.querySelector("#dashboardLaneColor").value, "#6c8496"), stages: [...document.querySelector("#dashboardLaneStages").selectedOptions].map(option => option.value) };
+  state.dashboardConfig.lanes.forEach(item => {
+    if (item.id !== state.editingDashboardLaneId) item.stages = item.stages.filter(stage => !lane.stages.includes(stage));
+  });
+  if (state.editingDashboardLaneId) {
+    const current = state.dashboardConfig.lanes.find(item => item.id === state.editingDashboardLaneId);
+    if (current) Object.assign(current, lane);
+  } else {
+    state.dashboardConfig.lanes.push({ id: `lane-${Date.now()}`, ...lane });
+  }
+  persistDashboardConfig();
+  document.querySelector("#dashboardLaneDialog").close();
+  renderDashboard();
+  showStatus("看板分层已保存");
+}
+
+function deleteDashboardLane(laneId) {
+  if (!window.confirm("删除这个分层？岗位不会被删除，会按真实阶段重新归位。")) return;
+  state.dashboardConfig.lanes = state.dashboardConfig.lanes.filter(lane => lane.id !== laneId);
+  persistDashboardConfig();
+  document.querySelector("#dashboardLaneDialog")?.close();
+  renderDashboard();
+  showStatus("看板分层已删除");
+}
+
+function moveDashboardLane(direction) {
+  const index = state.dashboardConfig.lanes.findIndex(lane => lane.id === state.editingDashboardLaneId);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= state.dashboardConfig.lanes.length) return;
+  [state.dashboardConfig.lanes[index], state.dashboardConfig.lanes[target]] = [state.dashboardConfig.lanes[target], state.dashboardConfig.lanes[index]];
+  persistDashboardConfig();
+  document.querySelector("#dashboardLaneDialog").close();
+  renderDashboard();
+  showStatus("看板分层顺序已保存");
+}
+
+function hideDashboardItem(itemKey, label) {
+  if (!itemKey || state.dashboardConfig.hiddenItems.includes(itemKey)) return;
+  state.dashboardConfig.hiddenItems.push(itemKey);
+  clearDashboardItemPlacement(itemKey);
+  persistDashboardConfig();
+  renderDashboard();
+  showStatus(`${label || "该岗位"} 已从仪表盘隐藏，岗位数据未改变`);
+}
+
+function restoreHiddenDashboardItems() {
+  state.dashboardConfig.hiddenCompanies = [];
+  state.dashboardConfig.hiddenItems = [];
+  persistDashboardConfig();
+  renderDashboard();
+  showStatus("已恢复仪表盘中隐藏的岗位");
+}
 
 function renderAssessments() {
   const target = document.querySelector("#assessmentWorkspace");
@@ -466,7 +838,7 @@ async function completeAssessment(button) {
     await fetch(`/api/positions/${position.id}/transition`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stage: "筛选中", note: "Owner completed assessment in local dashboard", expectedRevision: position.local_revision }),
+      body: JSON.stringify({ stage: "业务复筛中", note: "Owner completed assessment in local dashboard", expectedRevision: position.local_revision }),
     }).then(assertOk);
     await load();
   } catch (error) {
@@ -477,7 +849,7 @@ async function completeAssessment(button) {
 
 function openDashboardStage(stage) {
   state.positionView = "table";
-  state.section = stage === "面试中" ? "interviews" : "positions";
+  state.section = stage === "面试" ? "interviews" : "positions";
   state.stage = stage;
   renderStages(); renderRows(); renderSection();
 }
@@ -534,7 +906,7 @@ async function decideIntent(button) {
 
 function filtered() {
   const q = state.q.toLowerCase();
-  const positions = state.positions.filter(position => (!state.stage || position.stage === state.stage)
+  const positions = state.positions.filter(position => matchesStageView(position.stage, state.stage)
     && (!state.recommendation || position.recommendation === state.recommendation)
     && (!q || `${position.company} ${position.role_name} ${position.category} ${position.jd} ${position.assessment_content || ""}`.toLowerCase().includes(q)));
   if (state.stage === "待投递") return positions.sort(pendingPositionComparator(state.companySort));
@@ -575,12 +947,84 @@ function renderRows() {
   bindResumeLinks(document.querySelector("#rows"));
 }
 
+function bindColumnReordering() {
+  document.querySelectorAll("#columnHeaders th[data-column-id]").forEach(header => {
+    header.addEventListener("dragstart", event => {
+      if (!event.target.closest(".column-drag-handle")) { event.preventDefault(); return; }
+      state.draggedColumnId = Number(header.dataset.columnId);
+      header.classList.add("column-dragging");
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", String(state.draggedColumnId));
+      document.body.classList.add("is-reordering-column");
+    });
+    header.addEventListener("dragover", event => {
+      if (!state.draggedColumnId || Number(header.dataset.columnId) === state.draggedColumnId) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      document.querySelectorAll("#columnHeaders th").forEach(item => item.classList.remove("column-drop-before", "column-drop-after"));
+      header.classList.add(event.clientX < header.getBoundingClientRect().left + header.getBoundingClientRect().width / 2 ? "column-drop-before" : "column-drop-after");
+    });
+    header.addEventListener("drop", event => {
+      event.preventDefault();
+      const targetId = Number(header.dataset.columnId);
+      const sourceId = state.draggedColumnId;
+      const before = event.clientX < header.getBoundingClientRect().left + header.getBoundingClientRect().width / 2;
+      clearColumnDragState();
+      if (!sourceId || sourceId === targetId) return;
+      const ids = state.columns.map(column => column.id);
+      const sourceIndex = ids.indexOf(sourceId);
+      let targetIndex = ids.indexOf(targetId);
+      if (sourceIndex < 0 || targetIndex < 0) return;
+      ids.splice(sourceIndex, 1);
+      targetIndex = ids.indexOf(targetId) + (before ? 0 : 1);
+      ids.splice(targetIndex, 0, sourceId);
+      persistColumnOrder(ids);
+    });
+    header.addEventListener("dragend", clearColumnDragState);
+    header.addEventListener("keydown", event => {
+      if (!event.altKey || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+      event.preventDefault();
+      const ids = state.columns.map(column => column.id);
+      const index = ids.indexOf(Number(header.dataset.columnId));
+      const target = index + (event.key === "ArrowLeft" ? -1 : 1);
+      if (index < 0 || target < 0 || target >= ids.length) return;
+      [ids[index], ids[target]] = [ids[target], ids[index]];
+      persistColumnOrder(ids);
+    });
+  });
+}
+
+function clearColumnDragState() {
+  state.draggedColumnId = null;
+  document.body.classList.remove("is-reordering-column");
+  document.querySelectorAll("#columnHeaders th").forEach(header => header.classList.remove("column-dragging", "column-drop-before", "column-drop-after"));
+}
+
+async function persistColumnOrder(ids) {
+  try {
+    const result = await fetch("/api/table-columns/reorder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }) }).then(assertOk);
+    state.columns = result.columns;
+    renderRows();
+    showStatus("列顺序已保存");
+  } catch (error) { showError(error); await load(); }
+}
+
+async function resetColumnOrder() {
+  if (!window.confirm("恢复默认列序？当前自定义排列会被替换。")) return;
+  try {
+    const result = await fetch("/api/table-columns/reset-order", { method: "POST", headers: { "Content-Type": "application/json" } }).then(assertOk);
+    state.columns = result.columns;
+    renderRows();
+    showStatus("已恢复默认列序");
+  } catch (error) { showError(error); await load(); }
+}
+
 function renderColumnHeaders() {
   const headers = state.columns.map(column => {
     const sort = column.source_field === "company"
       ? `<button id="companySort" class="column-sort" type="button" aria-label="公司名称排序">${esc(column.label)} <span aria-hidden="true">↑</span></button>`
       : `<span class="column-label">${esc(column.label)}</span>`;
-    return `<th style="width:${column.width}px" data-column-id="${column.id}"><div class="column-heading">${sort}<button class="column-menu" type="button" data-edit-column="${column.id}" title="管理列" aria-label="管理 ${attr(column.label)} 列">•••</button><span class="column-resizer" data-resize-column="${column.id}" aria-hidden="true"></span></div></th>`;
+    return `<th style="width:${column.width}px" data-column-id="${column.id}" tabindex="0" aria-label="${attr(column.label)} 列，可拖动调整顺序" aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"><div class="column-heading"><span class="column-drag-handle" draggable="true" title="拖动调整列顺序" aria-hidden="true">⠿</span>${sort}<button class="column-menu" type="button" data-edit-column="${column.id}" title="管理列" aria-label="管理 ${attr(column.label)} 列">•••</button><span class="column-resizer" data-resize-column="${column.id}" aria-hidden="true"></span></div></th>`;
   }).join("");
   document.querySelector("#columnHeaders").innerHTML = `${headers}<th class="row-actions-heading"><span class="visually-hidden">操作</span></th>`;
   document.querySelector(".data-grid").style.width = `max(100%, ${state.columns.reduce((sum, column) => sum + column.width, 44)}px)`;
@@ -591,6 +1035,7 @@ function renderColumnHeaders() {
   });
   document.querySelectorAll("[data-edit-column]").forEach(button => button.addEventListener("click", () => openColumnDialog(Number(button.dataset.editColumn))));
   document.querySelectorAll("[data-resize-column]").forEach(handle => handle.addEventListener("pointerdown", startColumnResize));
+  bindColumnReordering();
 }
 
 function startColumnResize(event) {

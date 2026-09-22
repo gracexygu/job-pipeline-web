@@ -1,10 +1,16 @@
 export const DATA_CONTRACT = "job-pipeline-data/v1";
-export const WEB_STAGES = ["待投递", "筛选中", "待测评", "面试中"];
+export const WEB_STAGES = ["待补信息", "待投递", "简历初筛中", "待测评", "业务复筛中", "待面试", "面试中", "简历挂", "面试挂", "已 Offer"];
 export const WEB_TRANSITIONS = {
-  待投递: ["筛选中"],
-  筛选中: ["待测评", "面试中"],
-  待测评: ["筛选中", "面试中"],
-  面试中: ["面试中"],
+  待补信息: ["待投递"],
+  待投递: ["简历初筛中"],
+  简历初筛中: ["待测评", "业务复筛中", "待面试", "简历挂"],
+  待测评: ["简历初筛中", "业务复筛中", "待面试", "简历挂"],
+  业务复筛中: ["待测评", "待面试", "简历挂"],
+  待面试: ["面试中", "面试挂"],
+  面试中: ["待面试", "面试挂", "已 Offer"],
+  简历挂: [],
+  面试挂: [],
+  "已 Offer": [],
 };
 
 const DEFAULT_FACTS = `# 网申通用事实表
@@ -51,6 +57,16 @@ export const DEFAULT_COLUMNS = [
 export const isoNow = () => new Date().toISOString();
 export const canWebTransition = (from, to) => from === to || Boolean(WEB_TRANSITIONS[from]?.includes(to));
 
+function normalizeLegacyWebStage(position) {
+  const stage = position.stage;
+  if (position.final_result === "已 Offer" || position.final_result === "Offer" || stage === "已 Offer") return "已 Offer";
+  if (position.final_result === "挂了") return stage === "面试中" ? "面试挂" : "简历挂";
+  if (WEB_STAGES.includes(stage)) return stage;
+  if (stage === "测评中") return "待测评";
+  if (stage === "筛选中" || stage === "已投递") return "简历初筛中";
+  return "待投递";
+}
+
 function columnsAt(timestamp) {
   return DEFAULT_COLUMNS.map(([column_key, label, kind, source_field, width, options], position) => ({
     id: position + 1, column_key, label, kind, source_field, position, width, options,
@@ -90,6 +106,7 @@ export function migrateWebState(value) {
     idMap.set(String(position.id), next);
     position.id = next;
     position.local_revision = Number(position.local_revision) || 1;
+    position.stage = normalizeLegacyWebStage(position);
     position.custom_values ||= {};
   });
   (state.assessments || []).forEach(assessment => {
