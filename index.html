@@ -39,6 +39,7 @@
           <label class="recommendation-filter"><span class="visually-hidden">推荐动作</span><select id="recommendation"><option value="">全部动作</option><option>立即投递</option><option>补信息</option><option>尽快投递</option><option>跟进</option><option>复盘</option><option>暂不投</option></select></label>
           <span id="resultCount" class="result-count" aria-live="polite"></span>
           <button id="addColumn" class="secondary-action" type="button"><span aria-hidden="true">＋</span>新增列</button>
+          <button id="resetColumns" class="secondary-action" type="button">恢复默认列序</button>
           <button id="add" class="add-position" type="button"><span aria-hidden="true">＋</span>新增岗位</button>
         </div>
       </section>
@@ -121,6 +122,17 @@
       <label>链接<input id="sourceUrl" type="url" maxlength="500" placeholder="https://"></label>
       <div class="dialog-grid"><label>类型<input id="sourceType" maxlength="80" placeholder="官网 / 社区 / 表格"></label><label>可信度<input id="sourceCredibility" maxlength="80" placeholder="已验证 / 待核验"></label></div>
       <footer><span></span><button type="button" data-close-dialog="sourceDialog">取消</button><button class="primary" type="submit">保存</button></footer>
+    </form>
+  </dialog>
+  <dialog id="dashboardLaneDialog" class="editor-dialog dashboard-config-dialog" aria-labelledby="dashboardLaneDialogTitle">
+    <form id="dashboardLaneForm" method="dialog">
+      <header><div><span class="eyebrow">PROGRESS BOARD</span><h2 id="dashboardLaneDialogTitle">新增分层</h2></div><button class="dialog-close" type="button" data-close-dialog="dashboardLaneDialog" aria-label="关闭">×</button></header>
+      <label>分层名称<input id="dashboardLaneName" required maxlength="40" placeholder="例如：二面 / 已挂"></label>
+      <label>分层颜色<input id="dashboardLaneColor" type="color" value="#6c8496" aria-label="分层颜色"></label>
+      <label>包含的岗位阶段<select id="dashboardLaneStages" multiple size="6" aria-label="包含的岗位阶段"><option value="待补信息">待补信息</option><option value="待投递">待投递</option><option value="简历初筛中">简历初筛中</option><option value="待测评">待测评</option><option value="业务复筛中">业务复筛中</option><option value="待面试">待面试</option><option value="面试中">面试中</option><option value="简历挂">简历挂</option><option value="面试挂">面试挂</option><option value="已 Offer">已 Offer</option></select></label>
+      <p class="dialog-hint">同一岗位阶段只归属一个分层；保存后会自动从其他分层移除。未匹配的岗位会出现在“未分层”。</p>
+      <div id="dashboardLaneOrderActions" class="column-order-actions hidden"><button id="dashboardLaneMoveUp" type="button">↑ 上移</button><button id="dashboardLaneMoveDown" type="button">下移 ↓</button></div>
+      <footer><button id="dashboardLaneDelete" class="danger-action hidden" type="button">删除分层</button><span></span><button type="button" data-close-dialog="dashboardLaneDialog">取消</button><button class="primary" type="submit">保存</button></footer>
     </form>
   </dialog>
   <script src="./vendor/read-excel-file.min.js"></script>

@@ -1,5 +1,5 @@
 import { IndexedDBStore } from "./data-store.js";
-import { WEB_STAGES, canWebTransition, createWebState, isoNow, normalizeWebImport } from "./data-contract.js";
+import { WEB_STAGES, canWebTransition, createWebState, isoNow, normalizeWebImport, DEFAULT_COLUMNS } from "./data-contract.js";
 
 const store = new IndexedDBStore();
 
@@ -138,7 +138,7 @@ export async function browserApiFetch(input, options = {}) {
     if (method === "GET" && url.pathname === "/api/bootstrap") return response({ dashboard: dashboard(data), positions: activePositions(data), columns: data.columns.filter(item => !item.deleted_at).sort((a, b) => a.position - b.position) });
     if (method === "GET" && url.pathname === "/api/sources") return response({ sources: data.sources });
     if (method === "GET" && url.pathname === "/api/intents") return response({ intents: data.intents.filter(item => item.status === "pending").map(item => intentView(data, item)).reverse() });
-    if (method === "GET" && url.pathname === "/api/interview-pipelines") return response({ pipelines: activePositions(data).filter(item => item.stage === "面试中").map(item => ({ ...item, rounds: data.interviewRounds.filter(round => round.position_id === item.id).sort((a, b) => a.sequence - b.sequence) })) });
+    if (method === "GET" && url.pathname === "/api/interview-pipelines") return response({ pipelines: activePositions(data).filter(item => ["待面试", "面试中"].includes(item.stage)).map(item => ({ ...item, rounds: data.interviewRounds.filter(round => round.position_id === item.id).sort((a, b) => a.sequence - b.sequence) })) });
     if (method === "GET" && url.pathname === "/api/application-facts") return response(data.applicationFacts);
     if (method === "GET" && url.pathname === "/api/discovery-runs/latest") return response({ run: data.discoveryRun });
 
@@ -208,7 +208,7 @@ export async function browserApiFetch(input, options = {}) {
     if (match && method === "POST" && !match[2]) {
       const { result } = await mutate(next => {
         const item = position(next, match[1]);
-        if (item.stage !== "面试中") throw new Error("岗位进入面试中后才能建立轮次。");
+        if (!["待面试", "面试中"].includes(item.stage)) throw new Error("岗位进入待面试或面试中后才能建立轮次。");
         const sequence = Math.max(0, ...next.interviewRounds.filter(round => round.position_id === item.id).map(round => round.sequence)) + 1;
         const now = isoNow();
         const round = { id: nextId(next, "round"), position_id: item.id, sequence, label: `第 ${sequence} 轮`, status: "waiting", result: "未定", scheduled_at: "", transcript_ref: "", created_at: now, updated_at: now };
@@ -262,7 +262,18 @@ export async function browserApiFetch(input, options = {}) {
       });
       return response({ columns: result });
     }
-    match = url.pathname.match(/^\/api\/table-columns\/(\d+)$/);
+    if (method === "POST" && url.pathname === "/api/table-columns/reset-order") {
+      const { result } = await mutate(next => {
+        const defaultOrder = DEFAULT_COLUMNS.map(([column_key]) => column_key);
+        const rank = key => { const index = defaultOrder.indexOf(key); return index < 0 ? defaultOrder.length : index; };
+        const live = next.columns.filter(item => !item.deleted_at);
+        const originalIndex = new Map(live.map((item, index) => [item.id, index]));
+        live.sort((a, b) => (rank(a.column_key) - rank(b.column_key)) || (originalIndex.get(a.id) - originalIndex.get(b.id)));
+        live.forEach((column, index) => { column.position = index; column.local_revision += 1; });
+        return live;
+      });
+      return response({ columns: result });
+    }
     if (match && method === "PATCH") {
       const { result } = await mutate(next => {
         const column = next.columns.find(item => item.id === Number(match[1]) && !item.deleted_at); if (!column) throw new Error("列不存在。"); checkRevision(column, inputBody.expectedRevision);
