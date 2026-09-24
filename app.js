@@ -15,7 +15,6 @@ const viewFromLocation = () => {
 };
 const storedCompanySort = localStorage.getItem("job-pipeline-company-sort");
 const storedPositionView = localStorage.getItem("job-pipeline-position-view");
-const state = { positions: [], columns: [], sources: [], intents: [], interviewPipelines: [], resumeLinks: new Map(), applicationFacts: null, factsEditing: false, dashboard: null, discoveryRun: null, view: viewFromLocation(), section: "positions", stage: "", positionView: storedPositionView === "dashboard" ? "dashboard" : "table", recommendation: "", companySort: storedCompanySort === "desc" ? "desc" : "asc", q: "", factsQuery: "", showSensitive: false, loading: false, notesEditing: new Set(), expandedAssessmentId: null, dashboardConfig: loadDashboardConfig(), editingDashboardLaneId: null, dashboardSuppressClickUntil: 0, editingColumnId: null, draggedColumnId: null };
 const stages = ["待确认", "检索新机会", "全部", "待投递", "简历筛选", "待测评", "面试"];
 const stageTransitions = { "待补信息": ["待投递"], "待投递": ["简历初筛中"], "简历初筛中": ["待测评", "业务复筛中", "待面试", "简历挂"], "待测评": ["简历初筛中", "业务复筛中", "待面试", "简历挂"], "业务复筛中": ["待测评", "待面试", "简历挂"], "待面试": ["面试中", "面试挂"], "面试中": ["待面试", "面试挂", "已 Offer"], "简历挂": [], "面试挂": [], "已 Offer": [] };
 const recommendations = ["立即投递", "补信息", "等开放", "准备测评", "准备面试", "跟进", "复盘", "暂不投", "尽快投递"];
@@ -43,6 +42,7 @@ const dashboardInterviewLanes = [
   { id: "round-first", name: "一面", color: "#c1d5de", match: /一面|初面|首面/ },
   { id: "round-second", name: "二面", color: "#d0c7dc", match: /二面|复面/ },
 ];
+const state = { positions: [], columns: [], sources: [], intents: [], interviewPipelines: [], resumeLinks: new Map(), applicationFacts: null, factsEditing: false, dashboard: null, discoveryRun: null, view: viewFromLocation(), section: "positions", stage: "", positionView: storedPositionView === "dashboard" ? "dashboard" : "table", recommendation: "", companySort: storedCompanySort === "desc" ? "desc" : "asc", q: "", factsQuery: "", showSensitive: false, loading: false, notesEditing: new Set(), expandedAssessmentId: null, dashboardConfig: loadDashboardConfig(), editingDashboardLaneId: null, dashboardSuppressClickUntil: 0, editingColumnId: null, draggedColumnId: null };
 const viewIds = { pipeline: "pipelineView", resume: "resumeView", application: "applicationView" };
 let discoveryPoll = null;
 
